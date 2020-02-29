@@ -1,0 +1,31 @@
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>OC Fire</title>
+        <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.css' rel='stylesheet' />
+    </head>
+    <body>
+        <div id='map' style="width:800px; height:600px;"></div>
+        <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+        <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.js'></script>
+        <script>
+            let map = null; // for the map
+            let occc = {} // for global data
+            const OCGeoCenter = [-117.823059, 33.669445] // center data on OC
+            // initialize the app
+            const loadApp = function(){
+                // initiate MapBox
+                mapboxgl.accessToken = "pk.eyJ1IjoiaW5pdGlhbGFwcHMiLCJhIjoiY2pzMnBzZGZnMDM0azQ5bDdyOHdraHV1ZyJ9.JdYkI5UwxhJgJOkbm2_8rw";
+                map = new mapboxgl.Map({
+                    container: "map",
+                    style: 'mapbox://styles/mapbox/satellite-streets-v11',
+                    center: OCGeoCenter,
+                    zoom: 8
+                });
+            }
+            loadApp();
+        </script>
+    </body>
+</html>
