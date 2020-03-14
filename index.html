@@ -7,7 +7,7 @@
         <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.css' rel='stylesheet' />
     </head>
     <body>
-        <div id='map' style="width:900px; height:500px;"></div>
+        <div id='map' style="width:900px; height:600px;"></div>
         <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
         <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.js'></script>
         <script>
@@ -22,23 +22,14 @@
                     container: "map",
                     style: 'mapbox://styles/mapbox/satellite-streets-v11',
                     center: OCGeoCenter,
-                    zoom: 3
+                    zoom: 6
                 });
-                map.on('load', function(){
-                    let bounds = map.getBounds();
-                    // convert lat lng
-                    var degrees2meters = function(point) {
-                            var x = point.lng * 20037508.34 / 180;
-                            var y = Math.log(Math.tan((90 + point.lat) * Math.PI / 360)) / (Math.PI / 180);
-                            y = y * 20037508.34 / 180;
-                            return [x, y]
-                    }
-                    
-                    let url = 'https://firms.modaps.eosdis.nasa.gov/wms/key/2147e40676a7ce56b909b75c37f6d145/?REQUEST=GetMap&layers=fires_viirs_24&WIDTH=900&HEIGHT=500&BBOX=' + degrees2meters(bounds._sw)[0] + ',' + degrees2meters(bounds._sw)[1] + ',' + degrees2meters(bounds._ne)[0] + ',' + degrees2meters(bounds._ne)[1] + '&SRS=EPSG:3857';
-                    console.log(url)
+                map.on('load', function(){                 
+                    let url = 'https://firms.modaps.eosdis.nasa.gov/wms/key/2147e40676a7ce56b909b75c37f6d145/?REQUEST=GetMap&layers=fires_viirs_24&WIDTH=512&HEIGHT=512&SYMBOLS=TRIANGLE&SIZE=100&BBOX={bbox-epsg-3857}&SRS=EPSG:3857';
                     map.addSource('wms-test-source', {
                         'type': 'raster',
-                        'tiles': [url]
+                        'tiles': [url],
+                        'tileSize': 512
                     });
                     map.addLayer(
                         {
