@@ -25,7 +25,7 @@
                     zoom: 6
                 });
                 map.on('load', function(){                 
-                    let url = 'https://firms.modaps.eosdis.nasa.gov/wms/key/2147e40676a7ce56b909b75c37f6d145/?REQUEST=GetMap&layers=fires_viirs_24&WIDTH=512&HEIGHT=512&SYMBOLS=TRIANGLE&SIZE=100&BBOX={bbox-epsg-3857}&SRS=EPSG:3857';
+                    let url = 'https://firms.modaps.eosdis.nasa.gov/wms/key/2147e40676a7ce56b909b75c37f6d145/?REQUEST=GetMap&layers=fires_viirs_24&WIDTH=512&HEIGHT=512&BBOX={bbox-epsg-3857}&SRS=EPSG:3857';
                     map.addSource('wms-test-source', {
                         'type': 'raster',
                         'tiles': [url],
