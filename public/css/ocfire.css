@@ -15,8 +15,6 @@ ORDER: Base + typography > general layout + grid > page layout > components
 
 1em = 16px
 */
-.ocfire {
-  color: red; }
-
-.testing123 {
-  border: 1px solid black; }
+#map {
+  width: 75vw;
+  height: 80vh; }

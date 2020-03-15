@@ -15,7 +15,6 @@ var gulp = require('gulp'),
 // Minifies JS
 gulp.task('js', function(){
     return gulp.src('./src/js/*.js')
-    .pipe(uglify())
     .pipe(gulp.dest('./public/js'))
 });
 
@@ -44,6 +43,7 @@ gulp.task('styles', function(){
 
 gulp.task('watch', function() {
     gulp.watch('./src/sass/**/*.scss', gulp.series('styles'));
+    gulp.watch('./src/js/**/*.js', gulp.series('js'));
 });
 
 gulp.task('default', gulp.series('styles', 'watch'));

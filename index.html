@@ -5,42 +5,12 @@
         <meta name="viewport" content="width=device-width,initial-scale=1.0">
         <title>OC Fire</title>
         <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.css' rel='stylesheet' />
+        <link href='./public/css/ocfire.css' rel='stylesheet' />
     </head>
     <body>
-        <div id='map' style="width:900px; height:600px;"></div>
+        <div id='map'></div>
         <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
         <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.js'></script>
-        <script>
-            let map = null; // for the map
-            let occc = {} // for global data
-            const OCGeoCenter = [-117.823059, 33.669445] // center data on OC
-            // initialize the app
-            const loadApp = function(){
-                // initiate MapBox
-                mapboxgl.accessToken = "pk.eyJ1IjoiaW5pdGlhbGFwcHMiLCJhIjoiY2pzMnBzZGZnMDM0azQ5bDdyOHdraHV1ZyJ9.JdYkI5UwxhJgJOkbm2_8rw";
-                map = new mapboxgl.Map({
-                    container: "map",
-                    style: 'mapbox://styles/mapbox/satellite-streets-v11',
-                    center: OCGeoCenter,
-                    zoom: 6
-                });
-                map.on('load', function(){                 
-                    let url = 'https://firms.modaps.eosdis.nasa.gov/wms/key/2147e40676a7ce56b909b75c37f6d145/?REQUEST=GetMap&layers=fires_viirs_24,fires_modis_24&WIDTH=512&HEIGHT=512&symbols=square,square&colors=240+40+40,250+200+50&size=8,8&BBOX={bbox-epsg-3857}&SRS=EPSG:3857';
-                    map.addSource('wms-test-source', {
-                        'type': 'raster',
-                        'tiles': [url],
-                        'tileSize': 512
-                    });
-                    map.addLayer(
-                        {
-                            'id': 'wms-test-layer',
-                            'type': 'raster',
-                            'source': 'wms-test-source'
-                        }
-                    );
-                });
-            }
-            loadApp();
-        </script>
+        <script src='./public/js/ocfire.js'></script>
     </body>
 </html>
