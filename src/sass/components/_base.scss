@@ -1,3 +1,5 @@
+@use '../abstracts/variables' as *;
+
 * {
     margin: 0;
     padding: 0;
@@ -12,4 +14,44 @@
 html {
     box-sizing: border-box;
     font-size: 62.5%; // 1rem = 10px, 10px/16px = 62.5%
+}
+
+body {
+    font-family: $font;
+    font-size: 1.4rem;
+    color: $text;
+    background: $bg;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+a {
+    color: $fire-warm;
+}
+
+.app {
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+}
+
+.contain-bar {
+    height: 0.4rem;
+    border-radius: 0.2rem;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+
+    span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, $fire-hot, $fire-warm, $fire-near);
+        border-radius: inherit;
+    }
 }

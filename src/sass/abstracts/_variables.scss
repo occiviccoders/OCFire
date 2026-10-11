@@ -1,0 +1,20 @@
+$bg: #0d0f12;
+$panel: #15181d;
+$panel-2: #1c2027;
+$border: rgba(255, 255, 255, 0.08);
+$text: #e8eaed;
+$text-dim: #9aa3ad;
+
+$fire-hot: #ff3b1f;
+$fire-warm: #ff9f1c;
+$fire-near: #ffd166;
+$fire-out: #8b95a1;
+$redflag: #ff2d78;
+$watch: #ffc93c;
+$ok: #3ddc84;
+
+$sidebar-width: 37rem;
+$radius: 0.8rem;
+// Map overlays sit above incident markers (z ≤ 1000) and below MapLibre popups (z 2000).
+$z-overlay: 1500;
+$font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

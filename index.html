@@ -1,16 +1,201 @@
+<!doctype html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width,initial-scale=1.0">
         <title>OC Fire</title>
-        <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.css' rel='stylesheet' />
-        <link href='./public/css/ocfire.css' rel='stylesheet' />
     </head>
     <body>
-        <div id='map'></div>
-        <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
-        <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v1.1.0/mapbox-gl.js'></script>
-        <script src='./public/js/ocfire.js'></script>
+        <div class="app">
+            <aside class="sidebar">
+                <header class="sidebar__header">
+                    <div class="brand">
+                        <span class="brand__mark" aria-hidden="true"></span>
+                        <div>
+                            <h1 class="brand__title">OC Fire</h1>
+                            <p class="brand__sub">Southern California wildfire watch</p>
+                        </div>
+                    </div>
+                    <div class="sidebar__actions">
+                        <button id="recenter" class="icon-btn" title="Recenter on Orange County" aria-label="Recenter on Orange County">◎</button>
+                        <button id="refresh" class="icon-btn" title="Refresh data" aria-label="Refresh data">↻</button>
+                    </div>
+                </header>
+
+                <div id="status" class="status" data-tone="busy">Loading…</div>
+                <div id="fw-banner" class="fw-banner" hidden></div>
+
+                <section class="stats">
+                    <div class="stat">
+                        <span class="stat__value" id="stat-count">—</span>
+                        <span class="stat__label">Active incidents</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat__value" id="stat-acres">—</span>
+                        <span class="stat__label">Acres burned</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat__value" id="stat-nearest">—</span>
+                        <span class="stat__label" id="stat-nearest-name">Nearest fire</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat__value" id="stat-hotspots">—</span>
+                        <span class="stat__label">Satellite hotspots (24h)</span>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <h2 class="panel__title">Layers</h2>
+                    <div class="toggles">
+                        <label class="toggle"><input type="checkbox" data-layer-toggle="perimeters" checked><span class="toggle__swatch toggle__swatch--perimeter"></span>Fire perimeters<i class="dot" data-source-status="perimeters"></i></label>
+                        <label class="toggle"><input type="checkbox" data-layer-toggle="incidents" checked><span class="toggle__swatch toggle__swatch--incident"></span>Incidents<i class="dot" data-source-status="incidents"></i></label>
+                        <label class="toggle" title="NASA FIRMS thermal detections, last 24h. Dashed rings = heat not matched to any known fire."><input type="checkbox" data-layer-toggle="hotspots" checked><span class="toggle__swatch toggle__swatch--hotspot"></span>Hotspots<i class="dot" data-source-status="hotspots"></i></label>
+                        <label class="toggle" title="NWS Red Flag Warnings and Fire Weather Watches"><input type="checkbox" data-layer-toggle="fireWeather" checked><span class="toggle__swatch toggle__swatch--redflag"></span>Red flag zones<i class="dot" data-source-status="fireWeather"></i></label>
+                        <label class="toggle"><input type="checkbox" data-wind-toggle="flow" checked><span class="toggle__swatch toggle__swatch--wind"></span>Wind flow<i class="dot" data-source-status="wind"></i></label>
+                        <label class="toggle"><input type="checkbox" data-wind-toggle="arrows"><span class="toggle__swatch toggle__swatch--arrows" aria-hidden="true">➤</span>Wind arrows</label>
+                        <label class="toggle" title="Hot-Dry-Windy index"><input type="checkbox" data-wind-toggle="hdw"><span class="toggle__swatch toggle__swatch--hdw"></span>Fire wx index</label>
+                        <label class="toggle" title="Smoke plumes traced from satellite imagery (NOAA HMS)"><input type="checkbox" data-layer-toggle="smoke"><span class="toggle__swatch toggle__swatch--smoke"></span>Smoke plumes<i class="dot" data-source-status="smoke"></i></label>
+                        <label class="toggle" title="CAL FIRE Fire Hazard Severity Zones (zoom in to load)"><input type="checkbox" data-layer-toggle="fhsz"><span class="toggle__swatch toggle__swatch--fhsz"></span>Hazard zones<i class="dot" data-source-status="fhsz"></i></label>
+                        <label class="toggle" title="Public Safety Power Shutoffs and outages (SCE, Cal OES)"><input type="checkbox" data-layer-toggle="power"><span class="toggle__swatch toggle__swatch--power"></span>Power shutoffs<i class="dot" data-source-status="power"></i></label>
+                        <label class="toggle"><input type="checkbox" id="toggle-satellite"><span class="toggle__swatch toggle__swatch--sat"></span>Satellite map</label>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel__head">
+                        <h2 class="panel__title">Fire weather &amp; air</h2>
+                        <span class="panel__hint">72h · Open-Meteo</span>
+                    </div>
+                    <div id="oc-forecast" class="oc-forecast"><p class="oc-outlook">Loading forecast…</p></div>
+                </section>
+
+                <section class="panel panel--grow">
+                    <div class="panel__head">
+                        <h2 class="panel__title">Active incidents</h2>
+                        <div class="segmented" id="scope">
+                            <button class="is-active" data-scope="near">Near OC</button>
+                            <button data-scope="all">All CA</button>
+                        </div>
+                    </div>
+                    <ul id="incident-list" class="incident-list"></ul>
+                </section>
+
+                <footer class="sidebar__footer">
+                    Data: CAL FIRE · NIFC WFIGS · NASA FIRMS · NWS · Open-Meteo · NOAA HMS · SCE · Cal OES · ALERTCalifornia. Routing: Valhalla (FOSSGIS) · Photon · CHP.
+                    Informational only. For evacuations follow
+                    <a href="https://protect.genasys.com" target="_blank" rel="noopener">Genasys Protect</a>
+                    and official alerts.
+                </footer>
+            </aside>
+
+            <main class="map-wrap">
+                <div id="map"></div>
+                <div class="map-actions">
+                    <button id="planner-open" class="planner-open">Plan an evacuation route</button>
+                    <button id="ready-open" class="planner-open planner-open--ready">Get ready</button>
+                </div>
+                <aside class="planner ready" id="ready" hidden>
+                    <header class="planner__head">
+                        <h2>Get ready</h2>
+                        <button id="ready-close" class="icon-btn icon-btn--sm" aria-label="Close">×</button>
+                    </header>
+                    <div class="ready__progress-row">
+                        <div class="ready__progress" id="ready-progress"></div>
+                        <span id="ready-progress-label" class="ready__progress-label"></span>
+                    </div>
+                    <div class="ready__tabs" id="ready-tabs"></div>
+                    <div class="ready__body" id="ready-body"></div>
+                    <p class="planner__hint">Checklists save in this browser. Guidance from CAL FIRE Ready, Set, Go! and OC Fire Authority.</p>
+                </aside>
+                <aside class="planner" id="planner" hidden>
+                    <header class="planner__head">
+                        <h2>Evacuation route planner</h2>
+                        <button id="planner-close" class="icon-btn icon-btn--sm" aria-label="Close planner">×</button>
+                    </header>
+                    <p class="planner__note">
+                        A planning aid, not an evacuation order. It steers around CHP-reported closures but doesn’t know about
+                        traffic or how fast a fire is moving. When an order is issued, follow <a href="https://protect.genasys.com" target="_blank" rel="noopener">Genasys Protect</a>
+                        and law enforcement directions.
+                    </p>
+
+                    <div class="planner__label">Starting point</div>
+                    <div class="planner__search">
+                        <input id="planner-q" type="search" placeholder="Search an address or place…" autocomplete="off">
+                        <ul id="planner-suggest" class="planner__suggest" hidden></ul>
+                    </div>
+                    <div class="planner__row">
+                        <button id="planner-locate" class="chip">◎ Use my location</button>
+                        <button id="planner-pick-start" class="chip">Pick on map</button>
+                    </div>
+
+                    <div class="planner__label">Fire threat</div>
+                    <p class="planner__hint">Active perimeters, CAL FIRE incidents and satellite hotspots are included automatically.</p>
+                    <div class="planner__row">
+                        <button id="planner-pick-fire" class="chip">+ Place a hypothetical fire</button>
+                        <button id="planner-clear-fire" class="chip" hidden>Remove it</button>
+                    </div>
+
+                    <div class="planner__label">How far to get out</div>
+                    <div class="segmented segmented--full" id="planner-range">
+                        <button data-range="10">10 mi</button>
+                        <button data-range="20" class="is-active">20 mi</button>
+                        <button data-range="35">35 mi</button>
+                    </div>
+
+                    <div id="planner-status" class="planner__status"></div>
+                    <ol id="planner-results" class="planner__results"></ol>
+                </aside>
+                <div class="timeline" id="timeline" hidden>
+                    <button id="tl-play" class="timeline__play" aria-label="Play forecast">▶</button>
+                    <div class="timeline__body">
+                        <div class="timeline__head">
+                            <span id="tl-label" class="timeline__label">Now</span>
+                            <span class="timeline__sub">Wind forecast</span>
+                        </div>
+                        <input type="range" id="tl-range" class="timeline__range" min="0" max="71" value="0" step="1" aria-label="Forecast hour">
+                        <div class="timeline__risk" id="tl-risk" title="Red = red-flag-level, amber = elevated fire weather at the selected forecast spot"></div>
+                        <div class="timeline__ticks" id="tl-ticks"></div>
+                    </div>
+                </div>
+                <div class="legend" id="legend">
+                    <button class="legend__toggle" id="legend-toggle" aria-expanded="false">Legend</button>
+                    <div class="legend__title">Containment</div>
+                    <div class="legend__ramp"></div>
+                    <div class="legend__scale"><span>0%</span><span>60%</span><span>100%</span></div>
+                    <div class="legend__row"><span class="legend__meter"><span></span></span>Incident · bar = % contained</div>
+                    <div class="legend__row"><span class="legend__edge"></span>Active fire edge</div>
+                    <div class="legend__row"><span class="legend__dash legend__dash--growth"></span>Earlier perimeters (growth)</div>
+                    <div class="legend__row"><span class="legend__dot legend__dot--hotspot"></span>Satellite hotspot</div>
+                    <div class="legend__row"><span class="legend__dot legend__dot--heat"></span>Unmatched heat (possible new fire)</div>
+                    <div class="legend__row"><span class="legend__dash legend__dash--redflag"></span>Red flag warning</div>
+                    <div class="legend__row"><span class="legend__dash legend__dash--watch"></span>Fire weather watch</div>
+                    <div class="legend__smoke" hidden>
+                        <div class="legend__title">Smoke (satellite)</div>
+                        <div class="legend__swatches"><span style="--c:rgba(200,190,178,.35)">Light</span><span style="--c:rgba(169,156,140,.55)">Medium</span><span style="--c:rgba(138,122,106,.8)">Heavy</span></div>
+                        <div class="legend__note legend__smoke-none" hidden>No smoke plumes mapped over California today</div>
+                    </div>
+                    <div class="legend__fhsz" hidden>
+                        <div class="legend__title">Fire hazard severity</div>
+                        <div class="legend__swatches"><span style="--c:#f2d64b">Moderate</span><span style="--c:#f08c2e">High</span><span style="--c:#d7301f">Very high</span></div>
+                        <div class="legend__note legend__fhsz-zoom">Zoom in closer to load zones</div>
+                    </div>
+                    <div class="legend__power" hidden>
+                        <div class="legend__title">Power</div>
+                        <div class="legend__swatches"><span style="--c:#a46bff">Safety shutoff</span><span style="--c:#6fb6ff">Outage</span></div>
+                    </div>
+                    <div class="legend__hdw" hidden>
+                        <div class="legend__title">Hot-Dry-Windy index</div>
+                        <div class="legend__ramp legend__ramp--hdw"></div>
+                        <div class="legend__scale"><span>low</span><span>high</span><span>extreme</span></div>
+                    </div>
+                </div>
+            </main>
+            <aside class="sheet" id="sheet" hidden aria-label="Details">
+                <div class="sheet__handle" aria-hidden="true"></div>
+                <button class="icon-btn icon-btn--sm sheet__close" aria-label="Close">×</button>
+                <div class="sheet__body"></div>
+            </aside>
+        </div>
+        <script type="module" src="/src/js/main.js"></script>
     </body>
 </html>

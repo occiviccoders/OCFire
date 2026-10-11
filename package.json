@@ -1,0 +1,24 @@
+{
+  "name": "ocfire",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Local wildfire situational awareness map for Orange County / Southern California",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/occiviccoders/OCFire.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "maplibre-gl": "^6.14.0"
+  },
+  "devDependencies": {
+    "sass": "^1.105.1",
+    "vite": "^8.3.4"
+  }
+}

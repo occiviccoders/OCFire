@@ -1,5 +1,4 @@
-@import 'abstracts/variables';
-@import 'abstracts/mixins';
-
-@import 'components/map';
-@import 'components/sidebar';
+@use 'components/base';
+@use 'components/sidebar';
+@use 'components/map';
+@use 'components/planner';

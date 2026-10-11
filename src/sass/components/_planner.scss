@@ -1,0 +1,458 @@
+@use '../abstracts/variables' as *;
+@use '../abstracts/mixins' as *;
+
+.map-actions {
+    position: absolute;
+    top: 1.2rem;
+    left: 1.2rem;
+    z-index: $z-overlay;
+    display: flex;
+    gap: 0.6rem;
+
+    @include respond(phone) {
+        top: 0.8rem;
+        left: 0.8rem;
+        right: 5rem;
+        flex-wrap: wrap;
+    }
+}
+
+.planner-open {
+    padding: 0.9rem 1.4rem;
+    border-radius: 99rem;
+    border: 1px solid rgba(61, 220, 132, 0.5);
+    background: rgba($panel, 0.92);
+    color: $text;
+    font-weight: 600;
+    font-size: 1.3rem;
+    box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.4);
+
+    &::before {
+        content: '';
+        display: inline-block;
+        width: 0.8rem;
+        height: 0.8rem;
+        margin-right: 0.8rem;
+        border-radius: 50%;
+        background: $ok;
+        box-shadow: 0 0 0.8rem $ok;
+    }
+
+    &:hover { background: $panel-2; }
+    &[hidden] { display: none; }
+
+    @include respond(phone) {
+        padding: 0.7rem 1.1rem;
+        font-size: 1.2rem;
+    }
+
+    &--ready {
+        border-color: rgba(111, 182, 255, 0.5);
+
+        &::before { background: #6fb6ff; box-shadow: 0 0 0.8rem #6fb6ff; }
+    }
+}
+
+.planner {
+    position: absolute;
+    top: 1.2rem;
+    left: 1.2rem;
+    bottom: 1.2rem;
+    width: 36rem;
+    z-index: $z-overlay + 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    padding: 1.4rem;
+    overflow-y: auto;
+    background: rgba($panel, 0.96);
+    backdrop-filter: blur(8px);
+    border: 1px solid $border;
+    border-radius: $radius;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+
+    &[hidden] { display: none; }
+
+    // Phones/tablets: bottom sheet over the sidebar, leaving the top of the map visible.
+    @include respond(tab-port) {
+        position: fixed;
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: auto;
+        height: 58vh;
+        height: 58dvh;
+        border-radius: $radius $radius 0 0;
+        border-bottom: none;
+        padding-bottom: calc(1.4rem + env(safe-area-inset-bottom));
+    }
+
+    &__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        h2 { font-size: 1.6rem; }
+    }
+
+    &__note {
+        font-size: 1.15rem;
+        line-height: 1.45;
+        color: $text-dim;
+        padding: 0.8rem 1rem;
+        border-left: 3px solid $watch;
+        background: rgba($watch, 0.06);
+        border-radius: 0 0.6rem 0.6rem 0;
+    }
+
+    &__label {
+        margin-top: 0.4rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: $text-dim;
+    }
+
+    &__hint {
+        font-size: 1.15rem;
+        color: $text-dim;
+    }
+
+    &__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+
+    &__search {
+        position: relative;
+
+        input {
+            width: 100%;
+            padding: 0.9rem 1.1rem;
+            border-radius: 0.6rem;
+            border: 1px solid $border;
+            background: $panel-2;
+            color: $text;
+            font: inherit;
+            font-size: 1.3rem;
+
+            &:focus { outline: 1px solid rgba($fire-warm, 0.6); }
+        }
+    }
+
+    &__suggest {
+        position: absolute;
+        top: calc(100% + 0.4rem);
+        left: 0;
+        right: 0;
+        z-index: 2;
+        list-style: none;
+        background: $panel-2;
+        border: 1px solid $border;
+        border-radius: 0.6rem;
+        overflow: hidden;
+        box-shadow: 0 0.6rem 1.6rem rgba(0, 0, 0, 0.5);
+
+        button {
+            width: 100%;
+            text-align: left;
+            padding: 0.8rem 1.1rem;
+            border: none;
+            background: none;
+            font-size: 1.25rem;
+
+            &:hover { background: rgba(255, 255, 255, 0.06); }
+        }
+    }
+
+    &__status {
+        font-size: 1.2rem;
+        line-height: 1.45;
+        color: $text-dim;
+
+        strong { color: $text; }
+        &:empty { display: none; }
+    }
+
+    &__cone-key { color: #ff9a3c; }
+
+    &__progress {
+        display: block;
+        height: 0.4rem;
+        margin-top: 0.6rem;
+        border-radius: 0.2rem;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+
+        i {
+            display: block;
+            height: 100%;
+            background: $ok;
+            transition: width 0.3s;
+        }
+    }
+
+    &__results {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+}
+
+// Keep the forecast timeline and legend clear of the open planner.
+.is-planning {
+    .timeline { left: 39rem; }
+    .legend { display: none; }
+
+    @include respond(tab-port) {
+        .timeline { display: none; }
+    }
+}
+
+.icon-btn--sm {
+    width: 2.8rem;
+    height: 2.8rem;
+    font-size: 1.6rem;
+}
+
+.chip {
+    padding: 0.6rem 1.1rem;
+    border-radius: 99rem;
+    border: 1px solid $border;
+    background: $panel-2;
+    font-size: 1.2rem;
+
+    &:hover { background: #272c35; }
+    &.is-active { border-color: $fire-warm; color: $fire-warm; }
+    &[hidden] { display: none; }
+}
+
+.route {
+    width: 100%;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.1rem;
+    border-radius: $radius;
+    border: 1px solid $border;
+    background: $panel-2;
+
+    &.is-selected { border-color: rgba(255, 255, 255, 0.45); }
+
+    &__top {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+
+    &__rank {
+        flex-shrink: 0;
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: #0d0f12;
+        font-weight: 700;
+        font-size: 1.2rem;
+    }
+
+    &__title {
+        flex: 1;
+        font-weight: 600;
+        font-size: 1.35rem;
+    }
+
+    &__time {
+        font-size: 1.2rem;
+        color: $text-dim;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    &__status {
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    &__why {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        font-size: 1.2rem;
+        line-height: 1.35;
+
+        li::before {
+            display: inline-block;
+            width: 1.4rem;
+        }
+
+        .why--good::before { content: '✓'; color: $ok; }
+        .why--warn::before { content: '!'; color: $watch; font-weight: 700; }
+        .why--bad::before { content: '✕'; color: $redflag; }
+    }
+
+    &__link {
+        display: inline-block;
+        margin: 0.4rem 0 0 1.1rem;
+        font-size: 1.15rem;
+        text-decoration: none;
+    }
+}
+
+.evac-pin {
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+
+    &--start {
+        padding: 0.3rem 0.8rem;
+        border-radius: 99rem;
+        background: $ok;
+        color: #0d0f12;
+        font-size: 1.15rem;
+        border: 2px solid #fff;
+        box-shadow: 0 0 1rem rgba($ok, 0.7);
+    }
+
+    &--fire {
+        width: 3rem;
+        height: 3rem;
+        border-radius: 50%;
+        background: rgba($fire-hot, 0.25);
+        border: 2px solid $fire-hot;
+        font-size: 1.5rem;
+        box-shadow: 0 0 1.4rem $fire-hot;
+    }
+}
+
+.popup__cta {
+    display: inline-block;
+    margin-top: 0.8rem;
+    padding: 0.6rem 1.1rem;
+    border-radius: 99rem;
+    background: $ok;
+    color: #0d0f12;
+    font-weight: 600;
+    font-size: 1.2rem;
+    text-decoration: none;
+
+    &:hover { filter: brightness(1.1); }
+}
+
+.ready {
+    &__progress-row {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+
+    &__progress {
+        flex: 1;
+        height: 0.5rem;
+        border-radius: 0.3rem;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+
+        span {
+            display: block;
+            height: 100%;
+            background: $ok;
+            transition: width 0.3s;
+        }
+    }
+
+    &__progress-label {
+        font-size: 1.1rem;
+        color: $text-dim;
+        white-space: nowrap;
+    }
+
+    &__tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+
+    &__intro {
+        font-size: 1.25rem;
+        line-height: 1.45;
+        color: $text-dim;
+    }
+
+    &__list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        margin-top: 0.4rem;
+    }
+
+    &__item {
+        display: flex;
+        gap: 0.8rem;
+        align-items: flex-start;
+        padding: 0.6rem 0.8rem;
+        border-radius: 0.6rem;
+        font-size: 1.25rem;
+        line-height: 1.4;
+        cursor: pointer;
+
+        input {
+            margin-top: 0.25rem;
+            accent-color: $ok;
+            flex-shrink: 0;
+        }
+
+        &:hover { background: rgba(255, 255, 255, 0.04); }
+        input:checked + span { color: $text-dim; text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.25); }
+    }
+
+    &__report {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
+
+.check {
+    padding: 0.8rem 1rem 0.8rem 1.2rem;
+    border-radius: 0.6rem;
+    border-left: 3px solid $border;
+    background: $panel-2;
+    font-size: 1.25rem;
+    line-height: 1.4;
+    color: $text-dim;
+
+    strong { color: $text; }
+    p { margin-top: 0.2rem; font-size: 1.15rem; }
+
+    &--good { border-left-color: $ok; }
+    &--warn { border-left-color: $watch; }
+    &--bad { border-left-color: $redflag; background: rgba($redflag, 0.08); }
+}
+
+.evac-pin--home {
+    padding: 0.3rem 0.8rem;
+    border-radius: 99rem;
+    background: #6fb6ff;
+    color: #0d0f12;
+    font-size: 1.15rem;
+    border: 2px solid #fff;
+    box-shadow: 0 0 1rem rgba(111, 182, 255, 0.7);
+}
