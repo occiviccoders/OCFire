@@ -459,6 +459,10 @@
     border-radius: $radius;
     padding: 1.2rem 1.4rem;
     box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    // Static so the close button positions against the popup wrapper and stays put while content scrolls.
+    position: static;
 
     @include respond(tab-port) {
         max-height: 34vh;
@@ -471,6 +475,14 @@
     color: $text-dim;
     font-size: 1.8rem;
     padding: 0 0.6rem;
+    z-index: 1;
+}
+
+// The tip sits above the content when anchored at the top.
+.maplibregl-popup-anchor-top,
+.maplibregl-popup-anchor-top-left,
+.maplibregl-popup-anchor-top-right {
+    .maplibregl-popup-close-button { top: 10px; }
 }
 
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: $panel; }

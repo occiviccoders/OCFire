@@ -36,9 +36,42 @@ function keepVisible(map, lngLat) {
     if (y > visible - 40) map.panBy([0, y - visible / 2], { duration: 500 });
 }
 
+const EDGE_MARGIN = 12;
+const MIN_CARD_HEIGHT = 180;
+
+// Cap the popup's height to the map space on its open side so tall cards scroll instead of running off-screen.
+function fitToMap(map, popup) {
+    const el = popup.getElement();
+    const content = el?.querySelector('.maplibregl-popup-content');
+    if (!content) return;
+    const box = map.getContainer().getBoundingClientRect();
+    const rect = content.getBoundingClientRect();
+    const anchor = [...el.classList].find((c) => c.startsWith('maplibregl-popup-anchor-')) || '';
+    const room = anchor.includes('top')
+        ? box.bottom - rect.top
+        : anchor.includes('bottom')
+          ? rect.bottom - box.top
+          : box.height;
+    content.style.maxHeight = `${Math.max(MIN_CARD_HEIGHT, room - EDGE_MARGIN * 2)}px`;
+}
+
 // Same calls as maplibregl.Popup, but on small screens the content opens in a bottom sheet instead.
 export function createMapCard(map, options) {
     const popup = new maplibregl.Popup(options);
+    let frame = 0;
+    const refit = () => {
+        if (frame || !popup.isOpen()) return;
+        frame = requestAnimationFrame(() => {
+            frame = 0;
+            fitToMap(map, popup);
+        });
+    };
+    popup.on('open', () => {
+        refit();
+        popup.getElement().addEventListener('wheel', (ev) => ev.stopPropagation(), { passive: true });
+    });
+    map.on('move', refit);
+    map.on('resize', refit);
     let lngLat = null;
     let html = '';
     const card = {
@@ -50,6 +83,7 @@ export function createMapCard(map, options) {
         setHTML(h) {
             html = h;
             popup.setHTML(h);
+            refit();
             if (owner === card) body.innerHTML = h;
             return card;
         },
