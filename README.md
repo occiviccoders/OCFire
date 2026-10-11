@@ -1,4 +1,4 @@
-# OCFire
+# California Fire Watch
 
 Local wildfire situational-awareness map for Orange County and Southern California.
 

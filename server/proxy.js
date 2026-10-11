@@ -13,7 +13,7 @@ export async function proxy(context, upstream, { ttl, type = 'text/plain' }) {
 
     let upstreamRes;
     try {
-        upstreamRes = await fetch(upstream, { headers: { 'User-Agent': 'OCFire (https://www.occiviccoders.com)' } });
+        upstreamRes = await fetch(upstream, { headers: { 'User-Agent': 'California Fire Watch (https://www.occiviccoders.com)' } });
     } catch (err) {
         return new Response(`Upstream unavailable: ${err.message}`, { status: 502 });
     }
