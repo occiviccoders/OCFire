@@ -1,6 +1,6 @@
 // Disclaimer + data credits dialog. Shown on first visit and must be accepted before using the map;
 // bump the key version whenever the disclaimer text changes materially so everyone sees it again.
-const ACCEPT_KEY = 'ocfire.disclaimer.v1';
+const ACCEPT_KEY = 'ocfire.disclaimer.v2';
 
 for (const el of document.querySelectorAll('[data-year]')) el.textContent = new Date().getFullYear();
 

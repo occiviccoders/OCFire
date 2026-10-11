@@ -1,6 +1,7 @@
 # California Fire Watch
 
-A live wildfire map for California, built by [OC Civic Coders](https://www.occiviccoders.com/). It pulls
+A live wildfire map for California, operated by Initial Apps LLC and built with
+[OC Civic Coders](https://www.occiviccoders.com/). It pulls
 together public data that normally lives on a dozen different sites (CAL FIRE incidents, fire
 perimeters, NASA satellite hotspots, Red Flag Warnings, wind, smoke, air quality, power shutoffs, road
 closures, fire cameras) and puts it on one map, with tools to plan a way out and get a home ready.
@@ -11,7 +12,8 @@ The [Hosting](#hosting) section walks through exactly how, and how to run it som
 > **Disclaimer.** California Fire Watch is an unofficial volunteer project. It is information only,
 > provided “as is” with no warranty, and it is only as accurate as the third-party data it shows, which
 > can be late, incomplete, or wrong. Never use it to decide whether, when, or how to evacuate. Follow
-> official orders, alerts, and 911. OC Civic Coders and its contributors accept no liability for its use.
+> official orders, alerts, and 911. Initial Apps LLC, OC Civic Coders, and their contributors accept no
+> liability for its use.
 > The full text is shown in the app on first visit (`index.html`, `#about`).
 
 **Contents:** [What it does](#what-it-does) · [Quick start](#quick-start) · [How it's built](#how-its-built) ·
@@ -406,5 +408,9 @@ All data belongs to its publishers. Thank you for making it public.
 - **Readiness guidance**: CAL FIRE Ready, Set, Go! and the Orange County Fire Authority
 - **Software**: MapLibre GL JS, Vite, Sass
 
-Code is MIT licensed (see `LICENSE`), © 2020–present OC Civic Coders. The MIT license covers the code
-only; data is subject to each provider's terms, and use of the site is covered by the in-app disclaimer.
+California Fire Watch is operated by Initial Apps LLC (California), built with volunteers from OC Civic
+Coders. Contact: info@initialapps.com.
+
+Code is MIT licensed (see `LICENSE`), © 2020–present Initial Apps LLC and OC Civic Coders contributors.
+The MIT license covers the code only; data is subject to each provider's terms, and use of the site is
+covered by the in-app disclaimer.

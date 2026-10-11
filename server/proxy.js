@@ -1,7 +1,7 @@
 // Shared by the Cloudflare Pages Functions in /functions/api, which stand in for the Vite dev proxies
 // in production. Responses are cached at the edge so every visitor shares one upstream fetch.
 
-export const USER_AGENT = 'California Fire Watch (https://www.occiviccoders.com)';
+export const USER_AGENT = 'California Fire Watch (info@initialapps.com)';
 
 export async function proxy(context, upstream, { ttl, type = 'text/plain', headers = {} }) {
     const { request } = context;

@@ -9,9 +9,9 @@ import { fetchCandidateRoutes, placeName, searchPlaces } from './router.js';
 import { rankRoutes } from './score.js';
 
 const STATUS = {
-    good: { label: 'Recommended', color: '#3ddc84' },
+    good: { label: 'Fewest known hazards', color: '#3ddc84' },
     caution: { label: 'Use caution', color: '#ffc93c' },
-    avoid: { label: 'Avoid', color: '#ff2d78' },
+    avoid: { label: 'Passes near fire', color: '#ff2d78' },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -202,7 +202,7 @@ export function createPlanner(map, getContext, { onOpen = () => {} } = {}) {
                     </button>
                     <a class="route__link" href="${googleMapsLink(r)}" target="_blank" rel="noopener">Open this route in Google Maps →</a>
                 </li>`)
-            .join('');
+            .join('') + '<li class="route__caveat">Based on current data only. Conditions change fast — if officials direct you elsewhere, go their way.</li>';
         list.querySelectorAll('[data-route]').forEach((btn) => btn.addEventListener('click', () => selectRoute(Number(btn.dataset.route), { fit: true })));
     }
 
