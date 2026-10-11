@@ -1,9 +1,12 @@
 import { sampleField } from '../sources/weather.js';
 
-const PARTICLE_COUNT = 1400;
-const MAX_AGE = 80; // frames
-const PX_PER_MPH_PER_FRAME = 0.08;
-const FADE = 0.9;
+const PARTICLE_COUNT = 1400; // at REFERENCE_SIZE; scaled by map area
+const REFERENCE_SIZE = 1400 * 900;
+const MAX_AGE = 80; // 60 fps frames
+const PX_PER_MPH_PER_FRAME = 0.08; // per 60 fps frame on a REFERENCE_WIDTH map
+const REFERENCE_WIDTH = 1100;
+const FADE = 0.9; // per 60 fps frame
+const FRAME_MS = 1000 / 60;
 
 // Speed buckets (mph) so each frame is a handful of batched strokes instead of one per particle.
 // Light wind stays faint so it doesn't compete with the fire layers; strong wind gets loud.
@@ -64,6 +67,7 @@ export class WindParticles {
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.width = w;
         this.height = h;
+        this.particles = [];
     }
 
     clear() {
@@ -89,14 +93,18 @@ export class WindParticles {
         p.screen = null;
     }
 
-    frame() {
+    frame(now) {
         requestAnimationFrame(this.frame);
+        // Advance by elapsed time, not frames, so 120 Hz phones don't run at double speed.
+        const ticks = this.lastFrame ? Math.min((now - this.lastFrame) / FRAME_MS, 3) : 1;
+        this.lastFrame = now;
         if (!this.visible || !this.forecast || this.map.isMoving()) return;
 
         const bounds = this.spawnBounds();
         if (!bounds) return;
         if (!this.particles.length) {
-            this.particles = Array.from({ length: PARTICLE_COUNT }, () => {
+            const count = Math.round(PARTICLE_COUNT * Math.min(1, Math.max(0.3, (this.width * this.height) / REFERENCE_SIZE)));
+            this.particles = Array.from({ length: count }, () => {
                 const p = {};
                 this.spawn(p, bounds);
                 return p;
@@ -105,18 +113,20 @@ export class WindParticles {
 
         const ctx = this.ctx;
         ctx.globalCompositeOperation = 'destination-in';
-        ctx.fillStyle = `rgba(0, 0, 0, ${FADE})`;
+        ctx.fillStyle = `rgba(0, 0, 0, ${FADE ** ticks})`;
         ctx.fillRect(0, 0, this.width, this.height);
         ctx.globalCompositeOperation = 'source-over';
 
-        // Keep on-screen speed constant across zoom levels.
+        // Keep on-screen speed constant across zoom levels, and proportional to map width so
+        // streaks cross a phone screen at the same pace as a desktop one.
         const degPerPx = 360 / (512 * 2 ** this.map.getZoom());
-        const step = PX_PER_MPH_PER_FRAME * degPerPx;
+        const sizeScale = Math.min(1, Math.max(0.4, this.width / REFERENCE_WIDTH));
+        const step = PX_PER_MPH_PER_FRAME * sizeScale * ticks * degPerPx;
         const { u, v } = this.forecast;
         const paths = BUCKETS.map(() => new Path2D());
 
         for (const p of this.particles) {
-            if (++p.age > MAX_AGE) this.spawn(p, bounds);
+            if ((p.age += ticks) > MAX_AGE) this.spawn(p, bounds);
             const pu = sampleField(this.forecast, u, this.hour, p.lng, p.lat);
             const pv = sampleField(this.forecast, v, this.hour, p.lng, p.lat);
             if (Number.isNaN(pu) || Number.isNaN(pv) || p.lat < bounds.south || p.lat > bounds.north || p.lng < bounds.west || p.lng > bounds.east) {
