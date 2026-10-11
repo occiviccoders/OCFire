@@ -406,4 +406,5 @@ All data belongs to its publishers. Thank you for making it public.
 - **Readiness guidance**: CAL FIRE Ready, Set, Go! and the Orange County Fire Authority
 - **Software**: MapLibre GL JS, Vite, Sass
 
-Code is MIT licensed (see `LICENSE`). Data is subject to each provider's terms.
+Code is MIT licensed (see `LICENSE`), © 2020–present OC Civic Coders. The MIT license covers the code
+only; data is subject to each provider's terms, and use of the site is covered by the in-app disclaimer.

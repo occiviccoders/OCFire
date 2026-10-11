@@ -2,6 +2,8 @@
 // bump the key version whenever the disclaimer text changes materially so everyone sees it again.
 const ACCEPT_KEY = 'ocfire.disclaimer.v1';
 
+for (const el of document.querySelectorAll('[data-year]')) el.textContent = new Date().getFullYear();
+
 const dialog = document.getElementById('about');
 const accept = document.getElementById('about-accept');
 
