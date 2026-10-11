@@ -1,9 +1,11 @@
-import { fetchJSON, featureCollection, distanceMiles } from '../util.js';
+import { cached, fetchJSON, featureCollection, distanceMiles } from '../util.js';
 
-// CAL FIRE public incident feed, proxied by Vite (see vite.config.js).
+// CAL FIRE public incident feed, proxied (vite.config.js locally, functions/api/calfire in production).
 const ENDPOINT = '/api/calfire/umbraco/api/IncidentApi/GeoJsonList?inactive=false';
 
-export async function fetchIncidents() {
+export const fetchIncidents = cached(loadIncidents, 60 * 1000);
+
+async function loadIncidents() {
     const data = await fetchJSON(ENDPOINT);
 
     const features = data.features

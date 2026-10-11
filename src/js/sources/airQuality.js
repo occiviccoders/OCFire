@@ -1,5 +1,5 @@
 import { FORECAST_POINTS, WIND_FORECAST_HOURS } from '../config.js';
-import { fetchJSON } from '../util.js';
+import { cached, fetchJSON } from '../util.js';
 
 // Open-Meteo air-quality forecast (CAMS model, includes wildfire smoke), US AQI from PM2.5/ozone/etc.
 const ENDPOINT = 'https://air-quality-api.open-meteo.com/v1/air-quality';
@@ -43,9 +43,7 @@ export async function fetchPointAirQuality() {
     return cache.data;
 }
 
-export async function fetchAirQualityAt(coords) {
-    return (await fetchSeries([coords]))[0];
-}
+export const fetchAirQualityAt = cached(async (coords) => (await fetchSeries([coords]))[0], 30 * 60 * 1000, ([lng, lat]) => `${lng.toFixed(2)},${lat.toFixed(2)}`);
 
 // Reading at a given timestamp plus the worst hour in the following 24h.
 export function airOutlook(series, time) {

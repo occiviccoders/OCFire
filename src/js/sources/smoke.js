@@ -1,5 +1,5 @@
 import { CA_BBOX } from '../config.js';
-import { featureCollection } from '../util.js';
+import { cached, featureCollection } from '../util.js';
 
 // NOAA Hazard Mapping System: analysts trace smoke plumes on GOES/polar satellite imagery several
 // times a day. One KML per UTC day; early in the day it may not exist yet, so fall back a day.
@@ -44,7 +44,9 @@ function parseKML(text, day) {
     return features;
 }
 
-export async function fetchSmoke() {
+export const fetchSmoke = cached(loadSmoke, 10 * 60 * 1000);
+
+async function loadSmoke() {
     for (const offset of [0, 1]) {
         const { url, label } = dayPath(new Date(Date.now() - offset * 86400000));
         const res = await fetch(url);

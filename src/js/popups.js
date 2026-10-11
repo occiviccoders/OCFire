@@ -31,7 +31,7 @@ function camerasHTML(cameras) {
     if (!cameras?.length) return '';
     return `
         <div class="popup__cams">
-            <div class="popup__cams-title">Live cameras (ALERTCalifornia)</div>
+            <div class="popup__cams-title">Live cameras · ALERTCalifornia / UC San Diego</div>
             <div class="popup__cams-row">
                 ${cameras.map((c) => `
                     <a class="cam" href="${e(c.frame)}" target="_blank" rel="noopener" title="${e(c.name)} — open latest full-size frame">

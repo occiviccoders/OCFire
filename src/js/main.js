@@ -16,6 +16,7 @@ import { camerasNear, loadCameras } from './sources/cameras.js';
 import { findUnmatchedHeat } from './earlyDetection.js';
 import { createIncidentMarkers } from './incidentMarkers.js';
 import { closeSheet, createMapCard, sheetOverlap } from './mapCard.js';
+import { showDisclaimerIfNeeded } from './about.js';
 import { fetchWindForecast } from './sources/weather.js';
 import { fetchPointAirQuality } from './sources/airQuality.js';
 import { WindParticles } from './wind/particles.js';
@@ -45,6 +46,7 @@ const state = {
 };
 
 // MapLibre locates its worker relative to its own module URL, which breaks once Vite bundles it.
+showDisclaimerIfNeeded();
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 const map = new maplibregl.Map({
@@ -152,7 +154,17 @@ function whileVisible(fn, ms) {
     document.addEventListener('visibilitychange', run);
 }
 
-async function refresh() {
+// Overlapping calls (button mashing, auto-refresh firing mid-click) share the run in progress.
+// Each source also caches for 1–10 min (see sources/*), so a manual refresh only refetches what's stale.
+let refreshing = null;
+function refresh() {
+    refreshing ??= runRefresh().finally(() => {
+        refreshing = null;
+    });
+    return refreshing;
+}
+
+async function runRefresh() {
     setStatus('Refreshing…', 'busy');
     document.getElementById('refresh').classList.add('is-spinning');
 

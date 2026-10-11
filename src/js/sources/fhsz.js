@@ -1,4 +1,4 @@
-import { featureCollection, fetchJSON } from '../util.js';
+import { cached, featureCollection, fetchJSON } from '../util.js';
 
 // CAL FIRE / OSFM Fire Hazard Severity Zones (2024–25 maps, State and Local Responsibility Areas) —
 // the layer used for real-estate disclosure.
@@ -17,7 +17,9 @@ function responsibility(cls = '') {
 }
 
 // Polygons in the current view, simplified to roughly one screen pixel.
-export async function fetchZonesInView([[w, s], [e, n]], zoom) {
+export const fetchZonesInView = cached(loadZonesInView, 10 * 60 * 1000, ([[w, s], [e, n]], zoom) => [w, s, e, n].map((v) => v.toFixed(3)).join() + zoom.toFixed(1));
+
+async function loadZonesInView([[w, s], [e, n]], zoom) {
     const params = new URLSearchParams({
         where: '1=1',
         geometry: [w, s, e, n].join(','),
@@ -41,7 +43,9 @@ export async function fetchZonesInView([[w, s], [e, n]], zoom) {
 }
 
 // { level, label, area } for the zone containing a point, or null if it's not in a mapped zone.
-export async function zoneAt([lng, lat]) {
+export const zoneAt = cached(loadZoneAt, 24 * 60 * 60 * 1000, ([lng, lat]) => `${lng.toFixed(4)},${lat.toFixed(4)}`);
+
+async function loadZoneAt([lng, lat]) {
     const params = new URLSearchParams({
         geometry: `${lng},${lat}`,
         geometryType: 'esriGeometryPoint',

@@ -15,6 +15,23 @@ export async function fetchJSON(url, options) {
     return body;
 }
 
+// Wraps an async fetcher so repeat calls within `ttlMs` (per key) share one request. Failures aren't cached.
+export function cached(fn, ttlMs, keyOf = () => '') {
+    const store = new Map();
+    return (...args) => {
+        const key = keyOf(...args);
+        const hit = store.get(key);
+        if (hit && Date.now() - hit.at < ttlMs) return hit.promise;
+        const promise = fn(...args);
+        store.set(key, { at: Date.now(), promise });
+        promise.catch(() => {
+            if (store.get(key)?.promise === promise) store.delete(key);
+        });
+        if (store.size > 100) store.delete(store.keys().next().value);
+        return promise;
+    };
+}
+
 export function distanceMiles([lon1, lat1], [lon2, lat2] = OC_CENTER) {
     const toRad = (d) => (d * Math.PI) / 180;
     const dLat = toRad(lat2 - lat1);

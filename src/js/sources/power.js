@@ -1,4 +1,4 @@
-import { featureCollection, fetchJSON } from '../util.js';
+import { cached, featureCollection, fetchJSON } from '../util.js';
 
 // SCE publishes live Public Safety Power Shutoff areas (de-energized or under consideration).
 const SCE_PSPS = 'https://services5.arcgis.com/z6hI6KRjKHvhNO0r/arcgis/rest/services/SCE_PSPS_Monitor_and_Planned_Outage_Areas_Active_P2/FeatureServer/0';
@@ -13,7 +13,9 @@ const validDate = (ms) => (ms && ms > Date.UTC(2000, 0, 1) ? ms : null);
 
 const isPsps = (cause = '', type = '') => /PUBLIC SAFETY|PSPS/i.test(cause) || /PSPS/i.test(type);
 
-export async function fetchPower() {
+export const fetchPower = cached(loadPower, 3 * 60 * 1000);
+
+async function loadPower() {
     const [sce, areas, points] = await Promise.allSettled([
         geojson(SCE_PSPS, 'CIRCUIT_NAME,COUNTY,GrandTotal,PSPS,PSPS_DETAILS,ERT'),
         geojson(`${CALOES}/1`, 'UtilityCompany,Cause,ImpactedCustomers,OutageType,EstimatedRestoreDate,County'),

@@ -1,5 +1,5 @@
 import { CA_BBOX } from '../config.js';
-import { featureCollection } from '../util.js';
+import { cached, featureCollection } from '../util.js';
 
 // NASA FIRMS near-real-time satellite thermal detections, last 24h.
 const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT'];
@@ -45,7 +45,9 @@ async function fetchSensor(sensor) {
     });
 }
 
-export async function fetchHotspots() {
+export const fetchHotspots = cached(loadHotspots, 2 * 60 * 1000);
+
+async function loadHotspots() {
     if (!hotspotsEnabled) return featureCollection([]);
     const results = await Promise.allSettled(SENSORS.map(fetchSensor));
     const ok = results.filter((r) => r.status === 'fulfilled');

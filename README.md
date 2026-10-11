@@ -1,52 +1,337 @@
 # California Fire Watch
 
-Local wildfire situational-awareness map for Orange County and Southern California.
+A live wildfire map for California, built by [OC Civic Coders](https://www.occiviccoders.com/). It pulls
+together public data that normally lives on a dozen different sites (CAL FIRE incidents, fire
+perimeters, NASA satellite hotspots, Red Flag Warnings, wind, smoke, air quality, power shutoffs, road
+closures, fire cameras) and puts it on one map, with tools to plan a way out and get a home ready.
 
-## Run
+> **Disclaimer.** California Fire Watch is an unofficial volunteer project. It is information only,
+> provided “as is” with no warranty, and it is only as accurate as the third-party data it shows, which
+> can be late, incomplete, or wrong. Never use it to decide whether, when, or how to evacuate. Follow
+> official orders, alerts, and 911. OC Civic Coders and its contributors accept no liability for its use.
+> The full text is shown in the app on first visit (`index.html`, `#about`).
+
+**Contents:** [What it does](#what-it-does) · [Quick start](#quick-start) · [How it's built](#how-its-built) ·
+[Project layout](#project-layout) · [Feature walkthroughs](#feature-walkthroughs) ·
+[Data sources & API usage](#data-sources--api-usage) · [Deploying](#deploying) ·
+[Working on the code](#working-on-the-code) · [Credits & license](#credits--license)
+
+---
+
+## What it does
+
+| Feature | What you see |
+|---|---|
+| **Fires** | CAL FIRE incidents as callout cards (size, containment meter, wind at the fire), mapped perimeters with a glowing active edge, and earlier perimeters as growth rings. |
+| **Satellite heat** | NASA FIRMS detections from the last 24 h. Heat that isn't near any known fire is flagged as a *possible new fire*; heat that shows up every day (refineries, power plants) is labeled *persistent*. |
+| **Fire weather** | NWS Red Flag Warnings and Fire Weather Watches, an animated statewide wind field, wind arrows, a Hot-Dry-Windy index layer, and a 72-hour timeline to scrub through the forecast. |
+| **Forecast panel** | 72-hour wind/humidity chart and air quality for Orange County and the state's known fire-wind corridors (Santa Ana, Sundowner, Diablo, North wind). |
+| **Context layers** | Smoke plumes (NOAA), Fire Hazard Severity Zones (CAL FIRE), and power shutoffs/outages (SCE, Cal OES). |
+| **Fire cameras** | Each fire's card links the nearest ALERTCalifornia cameras, the ones pointed at it first. |
+| **Evacuation route planner** | Pick a start point; it fetches real driving routes in eight directions, scores them against fire perimeters, downwind spread zones, and CHP-reported closures/crashes, and shows the best three with an "Open in Google Maps" link. |
+| **Get ready** | Check any address (hazard zone, nearest fire, warnings, wind, air quality, power), plus saved checklists for defensible space, home hardening, a go-bag, leaving, and Red Flag days. |
+| **Phones** | Map on top, sidebar below, details and tools in bottom sheets. |
+
+---
+
+## Quick start
+
+Requires Node 20.19+ or 22.12+ (Vite 8).
 
 ```bash
 npm install
-cp .env.example .env.local   # add a free NASA FIRMS key to enable satellite hotspots
-npm run dev
+cp .env.example .env.local   # then paste a free NASA FIRMS map key into it
+npm run dev                  # http://localhost:5173
 ```
 
-CAL FIRE, NASA FIRMS, CHP and NOAA HMS don't allow cross-origin requests, so they're proxied by the Vite dev
-server (`vite.config.js`). Use `npm run dev` or `npm run preview`; opening `index.html` directly won't work.
+Get a FIRMS key at <https://firms.modaps.eosdis.nasa.gov/api/map_key/>. Without one the app still works;
+the satellite hotspot layer is just disabled.
 
-## Deploy (Cloudflare Pages)
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server with hot reload and the API proxies. |
+| `npm run build` | Production bundle in `dist/`. |
+| `npm run preview` | Serves `dist/` locally, with the same proxies. |
+| `npx wrangler pages dev dist` | Serves `dist/` with the **production** Cloudflare Functions instead of the Vite proxies (reads the key from `.dev.vars`). |
 
-In production the same `/api/*` routes are served by Cloudflare Pages Functions (`functions/api/`, shared
-code in `server/proxy.js`). They only accept the URL shapes the app uses and cache responses at the edge
-(CHP 1 min, CAL FIRE 2 min, FIRMS 5 min, smoke 10 min), so all visitors share one upstream fetch.
+Opening `index.html` directly from disk won't work; several sources must go through `/api/*`.
 
-1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → `occiviccoders/OCFire`.
-2. Build command `npm run build`, output directory `dist` (also set in `wrangler.toml`).
-3. Settings → Variables and Secrets → add `FIRMS_MAP_KEY` as a secret (Production and Preview).
-4. Custom domains → add e.g. `fire.occiviccoders.com` (the zone must be in the same Cloudflare account).
+---
 
-Test the production setup locally: `npm run build && npx wrangler pages dev dist` (reads the key from `.dev.vars`).
+## How it's built
 
+No framework: plain ES modules, [MapLibre GL JS](https://maplibre.org/) for the map, Sass for styles,
+[Vite](https://vite.dev/) to bundle. In production it's a static site on Cloudflare Pages plus a few
+small Pages Functions that act as caching proxies.
 
-## Data sources
+```mermaid
+flowchart LR
+    subgraph Browser
+        UI[index.html + src/js]
+    end
+    subgraph Cloudflare["Cloudflare Pages"]
+        Static[Static files from dist/]
+        Fn["Functions: /api/*<br/>allow-listed, edge-cached"]
+    end
+    UI --> Static
+    UI -->|/api/calfire · firms · nws · perimeters · hms · chp| Fn
+    Fn --> CF[CAL FIRE] & FIRMS[NASA FIRMS] & NWS[NWS] & ARC[FIRIS / WFIGS] & HMS[NOAA HMS] & CHP[CHP]
+    UI -->|direct, per user| OM[Open-Meteo] & FHSZ[CAL FIRE FHSZ] & PWR[SCE / Cal OES] & CAM[ALERTCalifornia] & VAL[Valhalla] & PH[Photon]
+```
 
-| Layer | Source | Refresh |
-| --- | --- | --- |
-| Incidents (points, containment) | CAL FIRE incident feed | 5 min, paused while hidden |
-| Fire perimeters | CAL FIRE FIRIS intel-flight perimeters + NIFC WFIGS (ArcGIS Feature Services) | 5 min, paused while hidden |
-| Satellite hotspots (24h) | NASA FIRMS — VIIRS (NOAA-20/21, S-NPP) + MODIS | 5 min, paused while hidden |
-| Unconfirmed heat (possible new fires) | FIRMS hotspots from the last 12h that aren't near any incident or perimeter; 5-day VIIRS history marks recurring industrial heat as "persistent" | 5 min (history 3h) |
-| Red flag warnings / fire weather watches | NWS `api.weather.gov` alerts + fire-weather zones | 5 min, paused while hidden |
-| Wind flow, arrows, Hot-Dry-Windy index, wind at each fire | Open-Meteo hourly forecast, statewide 0.35° grid masked to California (~500 points, cached in localStorage) | 3 h, paused while the tab is hidden |
-| Fire-weather outlook for OC + known wind corridors (Santa Ana, Sundowner, Diablo, North) | Open-Meteo point forecasts | 3 h, paused while the tab is hidden |
-| Air quality (AQI, PM2.5) | Open-Meteo air-quality API | 60 min |
-| Smoke plumes | NOAA HMS satellite smoke analysis (KML, proxied) | 5 min when on |
-| Fire Hazard Severity Zones | CAL FIRE FHSZ (2024 maps, ArcGIS Feature Service), loaded at zoom 9+ | on map move |
-| Power shutoffs / outages | SCE PSPS areas + Cal OES statewide outage feed | 5 min when on |
-| Fire cameras near each incident | ALERTCalifornia camera list + latest frames | on load |
-| Evacuation route planner: driving routes | Valhalla public demo server (FOSSGIS), 8 compass directions + alternates | on demand |
-| Evacuation planner: address search / place names | Photon (Komoot) geocoder | on demand |
-| Evacuation planner: road closures, SigAlerts, crashes, flooding | CHP live incident feed (`media.chp.ca.gov/sa_xml/sa.xml`, proxied) | 2 min while planning |
-| Get ready: address check, checklists | FHSZ, AQI, outages, incidents above; guidance from CAL FIRE Ready, Set, Go! and OCFA. Progress saved in localStorage | on demand |
-| Basemap | CARTO Dark Matter; Esri World Imagery (satellite toggle) | — |
+**Why some sources are proxied and some aren't.** A source goes through `/api/*` if (a) it doesn't allow
+browser requests (no CORS headers: CAL FIRE, FIRMS, CHP, NOAA HMS), (b) it needs a secret (FIRMS key),
+or (c) every visitor asks for the exact same data, so one cached copy can serve everyone (NWS alerts,
+fire perimeters). Sources that differ per user or per map view (your address, your route, the zones in
+your viewport) go direct from the browser.
 
-Informational only. For evacuations follow [Genasys Protect](https://protect.genasys.com) and official alerts.
+### The page lifecycle (`src/js/main.js`)
+
+`main.js` is the orchestrator. It owns a single `state` object and wires every module together:
+
+1. **Startup:** shows the disclaimer if it hasn't been accepted, creates the map, and on `load` adds all
+   layers (`layers.js`), the incident markers, wind particles, the HDW layer, the planner, and the
+   readiness drawer.
+2. **`refresh()`** runs every 5 minutes (only while the tab is visible) and on the ↻ button. It loads
+   incidents, perimeters, hotspots, hotspot history, and fire weather in parallel with
+   `Promise.allSettled`, so one failing source never blocks the others. Each result is pushed into a
+   MapLibre GeoJSON source with `setData`, then the sidebar re-renders. Overlapping calls share one run.
+3. **`refreshWind()`** runs every 3 hours. The statewide grid is about 500 points, so it's cached in
+   `localStorage` and reused across reloads.
+4. **Interaction:** a single map `click` handler checks the planner and readiness tools first, then
+   walks a priority list of clickable layers (heat, hotspots, power, perimeters, warnings, smoke, hazard
+   zones) and opens the matching popup.
+
+### Layers and draw order
+
+Everything visible on the map is a MapLibre layer except two things: incident callouts are DOM markers
+(`incidentMarkers.js`) and wind streaks are a `<canvas>` over the map (`wind/particles.js`). Layer order is
+set in `layers.js` with `beforeId`, from bottom to top: basemap → hazard zones / power / smoke → fire
+weather zones → HDW shading → perimeters and growth rings → hotspots → possible-new-fire rings → labels.
+Toggle groups in the sidebar map to `LAYER_GROUPS`.
+
+### Popups vs. bottom sheets (`mapCard.js`)
+
+`createMapCard()` returns an object with the same methods as `maplibregl.Popup` (`setLngLat`, `setHTML`,
+`addTo`, `remove`, `isOpen`). On wide screens it is a normal popup; below 900 px it renders the same HTML
+into a bottom sheet and pans the map so the tapped point stays visible. Callers don't know the
+difference.
+
+### Styling
+
+`src/sass/ocfire.scss` pulls in `abstracts/` (colors, the `respond()` breakpoint mixin) and one partial
+per area of the UI. Breakpoints: `tab-port` (≤ 900 px) stacks the map over the sidebar and turns drawers
+into bottom sheets; `phone` (≤ 600 px) tightens spacing. Overlays use `$z-overlay` so they sit above
+incident markers but below popups.
+
+---
+
+## Project layout
+
+```
+index.html                  Page shell: sidebar, map, drawers, bottom sheet, disclaimer dialog
+vite.config.js              Dev/preview proxies for /api/* (mirror of functions/)
+wrangler.toml               Cloudflare Pages config (build output = dist)
+functions/api/              Cloudflare Pages Functions (production proxies), one file per source
+server/proxy.js             Shared proxy: GET only, edge cache, User-Agent, error handling
+src/js/
+  main.js                   Orchestrator: state, refresh loops, map setup, click handling
+  config.js                 Map defaults, bounding boxes, wind grid, forecast corridors
+  layers.js                 All MapLibre sources/layers, colors, toggle groups, animations
+  incidentMarkers.js        CAL FIRE callout cards (DOM markers) with containment meters
+  popups.js                 HTML for every popup / sheet
+  explain.js                Plain-language summaries ("about 2× Disneyland", containment stages)
+  sidebar.js                Stats, incident list, status line, Red Flag banner
+  mapCard.js                Popup on desktop, bottom sheet on phones
+  about.js                  Disclaimer + credits dialog (first-visit acceptance)
+  earlyDetection.js         Clusters unexplained satellite heat into possible new fires
+  geo.js / util.js          Point-in-polygon, distances, formatting, fetchJSON, cached()
+  sources/                  One module per data feed; each returns GeoJSON or plain data
+  wind/                     Wind particles, arrows, HDW layer, timeline, forecast panel, fire-weather math
+  evac/                     Route planner: routing, hazards, scoring, geometry, UI
+  ready/                    "Get ready" drawer and checklist content
+src/sass/                   Styles (abstracts + one partial per UI area)
+```
+
+---
+
+## Feature walkthroughs
+
+### Incidents and perimeters (`sources/incidents.js`, `sources/perimeters.js`)
+
+- Incidents come from CAL FIRE's public GeoJSON feed and are sorted by distance from Orange County.
+- Perimeters merge two ArcGIS services: **FIRIS** (CAL FIRE / Cal OES intel flights; best California
+  coverage, keeps every historical polygon) and **NIFC WFIGS** (interagency; includes containment). They're
+  grouped by normalized fire name; the newest polygon wins and older ones become growth rings, but only
+  when they show real growth (> 5 % smaller), so repeat flights don't stack up.
+- `linkPerimeters()` matches perimeters to incidents by name, so perimeters gain containment/county and
+  incident markers know to hand off to the polygon when zoomed in.
+
+### Possible new fires (`earlyDetection.js`)
+
+1. Take hotspots from the last 12 h.
+2. Drop any within 5 mi of a CAL FIRE incident or inside a padded perimeter bounding box.
+3. Cluster the rest (single-link, 1.25 mi).
+4. Rate each cluster: **likely** if it has at least two of three signals (3+ detections, seen by more
+   than one satellite, any high-confidence detection), otherwise **possible**; or **persistent** if the
+   spot was hot on ≥ 2 of the previous 5 days within 0.6 mi, which catches refinery flares and power plants. Persistent heat is drawn gray and left out of the list.
+
+These can still be agricultural or prescribed burns. They're leads, not confirmed fires.
+
+### Wind and fire weather (`wind/`, `sources/weather.js`)
+
+- `weather.js` builds a 0.35° grid over California, masks it to the state outline, and requests hourly
+  wind, gusts, temperature, and humidity from Open-Meteo in chunks of 130 points (plus the corridor
+  forecast points in the same request). The result is cached in `localStorage` for 3 hours.
+- `particles.js` animates ~1,400 streaks on a canvas, bucketed by speed so each frame is a few batched
+  strokes. Particles live in lng/lat so they stay put while you pan.
+- `hdwLayer.js` paints the Hot-Dry-Windy index (vapor-pressure deficit × wind, `fireWeather.js`) onto a
+  small canvas and lets MapLibre stretch and smooth it over the map.
+- `fireWeatherLevel()` approximates NWS Southern California red-flag criteria (RH ≤ 15 % with sustained
+  ≥ 25 mph or gusts ≥ 35) plus an "elevated" tier for dry offshore wind.
+- `timeline.js` is the forecast scrubber; changing the hour updates particles, arrows, HDW, markers, and
+  the planner's spread zones.
+
+### Evacuation route planner (`evac/`)
+
+1. **Candidates** (`router.js`): ask Valhalla for driving routes from the start toward points `range`
+   miles away in 8 compass directions, two requests at a time. CHP closures near the start are passed as
+   `exclude_locations` so routing avoids those road segments.
+2. **Hazards** (`hazards.js`): perimeters, incidents without perimeters (circle sized from acreage),
+   hotspots, and an optional hypothetical fire become hazard zones. Each active fire also gets a 60°
+   **downwind wedge** based on the forecast wind at the selected hour.
+3. **Scoring** (`score.js`): each route is resampled every 250 m in a local km projection, then scored as
+   drive minutes plus penalties: passing through a fire (+600), getting closer to fire than you already
+   are (+25 to +120), distance inside downwind wedges, ending closer to fire, and CHP incidents on the
+   route (closures +150, injury crashes +30). Routes far longer than the range are dropped, and the top
+   three distinct headings are kept, each with plain-language reasons.
+4. **Display** (`planner.js`): routes, numbered end badges, hazard zones, wedges, and CHP incidents on the
+   map; a Google Maps link that passes start, end, and three waypoints so Google follows the same path.
+
+It is a planning aid. It doesn't know live traffic or what the fire will do next.
+
+### Get ready (`ready/`)
+
+`ready.js` checks a saved place (address search, your location, or a map pick) against everything the
+app already knows, plus three lookups: the Fire Hazard Severity Zone at that point, air quality there,
+and power status. Checklist content lives in `checklists.js` as plain data (`[id, text, link?]`), and
+progress is saved in `localStorage`.
+
+---
+
+## Data sources & API usage
+
+### Where each request goes and how often
+
+| Data | Source | Path | Cached |
+|---|---|---|---|
+| Fire incidents | CAL FIRE | `/api/calfire` | Edge 2 min, client 1 min |
+| Fire perimeters | CAL FIRE FIRIS + NIFC WFIGS (ArcGIS) | `/api/perimeters/{firis,wfigs}` | Edge 2 min, client 2 min |
+| Satellite hotspots | NASA FIRMS (VIIRS ×3 + MODIS) | `/api/firms` (key added server-side) | Edge 5 min, client 2 min; 5-day history client 3 h |
+| Red Flag Warnings / Watches | NWS | `/api/nws` | Edge 2 min (zone outlines 1 day), client 2 min |
+| Smoke plumes | NOAA HMS | `/api/hms` | Edge 10 min, client 10 min |
+| Road closures / crashes | CHP | `/api/chp` | Edge 1 min, client 2 min |
+| Wind grid + corridor forecasts | Open-Meteo | direct | `localStorage` 3 h |
+| Air quality | Open-Meteo Air Quality | direct | Client 30–60 min |
+| Fire Hazard Severity Zones | CAL FIRE OSFM (ArcGIS) | direct, zoom ≥ 9 | Client 10 min per view, 1 day per address |
+| Power shutoffs / outages | SCE, Cal OES (ArcGIS) | direct, when toggled on | Client 3 min |
+| Fire cameras | ALERTCalifornia | direct | Once per page load |
+| Routes | Valhalla (FOSSGIS) | direct | Only when planning |
+| Address search | Photon (komoot) | direct | Debounced 300 ms |
+
+**How usage is kept in check:**
+
+- **Edge cache** (`server/proxy.js`): one upstream fetch per cache period per Cloudflare location, no
+  matter how many people are on the site or how often they hit refresh.
+- **Client cache** (`cached()` in `util.js`): repeat calls within a source's window reuse the same
+  request. Mashing ↻ makes zero network requests until something is actually stale.
+- **Visibility:** auto-refresh pauses while the tab is hidden and catches up when you return.
+- **Allow-lists:** each function only accepts the exact URL shapes the app uses, so `/api/*` can't be used
+  as a general-purpose proxy.
+- **Why Open-Meteo stays direct:** its free tier is metered per IP address. Called from the browser,
+  each visitor uses their own allowance (≈ 4,000 calls/day for a tab left open all day, against a
+  10,000/day limit). Routed through Cloudflare, every visitor would share a handful of data-center IPs
+  and hit the limit quickly. Open-Meteo's free tier is for non-commercial use.
+- **Valhalla and Photon** are free community servers with fair-use policies. They're only called when
+  someone actively plans a route or searches an address. A high-traffic deployment should run its own
+  instances or use a paid provider.
+
+### Adding a new data source
+
+1. Write `src/js/sources/<name>.js` that returns GeoJSON (or plain data), and wrap the export in
+   `cached(loader, ttlMs)`.
+2. If the source lacks CORS headers, needs a key, or is identical for every visitor, add a proxy:
+   an entry in `vite.config.js` for dev **and** `functions/api/<name>.js` (using `proxy()` with an
+   allow-list) for production.
+3. Add a source and layers in `layers.js` (and to `LAYER_GROUPS` if it should be toggleable).
+4. Load it from `refresh()` or `loadOverlay()` in `main.js`; add a popup in `popups.js` and a click
+   target in `wireInteractions()`.
+5. Credit it in the app (`#about-sources` in `index.html`) and in the credits list below.
+
+---
+
+## Deploying
+
+Production runs on **Cloudflare Pages**, in the same Cloudflare account that hosts `occiviccoders.com`.
+
+1. Workers & Pages → Create application → **Continue to Pages** → Import an existing Git repository →
+   `occiviccoders/OCFire`.
+2. Production branch `master`, build command `npm run build`, output directory `dist`.
+3. Settings → Variables and Secrets → add **`FIRMS_MAP_KEY`** (encrypted) for Production and Preview,
+   then redeploy. Without it, `/api/firms` returns 503 and hotspots stay empty.
+4. Custom domains → add a subdomain of `occiviccoders.com`.
+
+Every push to `master` deploys automatically; other branches get preview URLs. Node is pinned by
+`.node-version`. The build sets `__FIRMS_ENABLED__` from `FIRMS_MAP_KEY` or Cloudflare's `CF_PAGES`
+variable, because the key itself only exists at runtime in the Functions.
+
+To test the production Functions locally: put `FIRMS_MAP_KEY=...` in `.dev.vars` (gitignored), then
+`npm run build && npx wrangler pages dev dist`.
+
+> Note: CAL FIRE's server doesn't send its full certificate chain (Sectigo R46 root). Cloudflare's
+> production network accepts it, but local `wrangler` may not; if `/api/calfire` returns 502 locally,
+> run wrangler with `NODE_EXTRA_CA_CERTS` pointing at that root certificate.
+
+---
+
+## Working on the code
+
+- **Inspect live state:** in dev, `window.__ocfire` exposes `{ map, state }`, for example
+  `__ocfire.state.incidents.features` or `__ocfire.map.getStyle().layers`.
+- **Simulate a map click** (handy for testing popups and the planner):
+  ```js
+  const m = __ocfire.map, ll = { lng: -117.65, lat: 33.74 };
+  m.fire('click', { lngLat: ll, point: m.project(ll), originalEvent: { target: m.getCanvas() } });
+  ```
+- **Read a GeoJSON source:** `await __ocfire.map.getSource('perimeters').getData()`.
+- **Phones:** use the browser's device toolbar; the layout switches at 900 px.
+- **Clear cached wind:** `localStorage.removeItem('ocfire.wind.v3')`.
+- **See the disclaimer again:** `localStorage.removeItem('ocfire.disclaimer.v1')`. Bump that key in
+  `about.js` whenever the disclaimer text changes materially, so everyone re-accepts it.
+- **Conventions:** one module per concern; data modules return plain GeoJSON and know nothing about the
+  map; `main.js` is the only place that connects data to layers and UI. Comments explain *why*
+  (constraints, data quirks), not *what*.
+
+---
+
+## Credits & license
+
+All data belongs to its publishers. Thank you for making it public.
+
+- **CAL FIRE**: incident feed; Fire Hazard Severity Zones (Office of the State Fire Marshal); FIRIS perimeters with Cal OES
+- **NIFC**: WFIGS interagency fire perimeters
+- **NASA FIRMS**: We acknowledge the use of data from NASA's Fire Information for Resource Management
+  System (FIRMS) (<https://earthdata.nasa.gov/firms>), part of NASA's Earth Science Data and Information System (ESDIS).
+- **National Weather Service** (NOAA): Red Flag Warnings, Fire Weather Watches, fire-weather zones
+- **NOAA NESDIS Hazard Mapping System**: smoke plumes
+- **Open-Meteo**: [Weather data by Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0); air quality generated
+  using Copernicus Atmosphere Monitoring Service information
+- **Southern California Edison**: PSPS areas · **Cal OES**: statewide power outages
+- **ALERTCalifornia, UC San Diego**: wildfire cameras
+- **California Highway Patrol**: live incident feed
+- **Valhalla** routing on the FOSSGIS e.V. public server · **Photon** geocoder by komoot
+- **Map data** © OpenStreetMap contributors (ODbL) · basemap © CARTO · satellite imagery © Esri, Maxar, Earthstar Geographics
+- **Readiness guidance**: CAL FIRE Ready, Set, Go! and the Orange County Fire Authority
+- **Software**: MapLibre GL JS, Vite, Sass
+
+Code is MIT licensed (see `LICENSE`). Data is subject to each provider's terms.

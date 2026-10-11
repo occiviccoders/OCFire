@@ -1,7 +1,9 @@
 // Shared by the Cloudflare Pages Functions in /functions/api, which stand in for the Vite dev proxies
 // in production. Responses are cached at the edge so every visitor shares one upstream fetch.
 
-export async function proxy(context, upstream, { ttl, type = 'text/plain' }) {
+export const USER_AGENT = 'California Fire Watch (https://www.occiviccoders.com)';
+
+export async function proxy(context, upstream, { ttl, type = 'text/plain', headers = {} }) {
     const { request } = context;
     if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
 
@@ -13,7 +15,7 @@ export async function proxy(context, upstream, { ttl, type = 'text/plain' }) {
 
     let upstreamRes;
     try {
-        upstreamRes = await fetch(upstream, { headers: { 'User-Agent': 'California Fire Watch (https://www.occiviccoders.com)' } });
+        upstreamRes = await fetch(upstream, { headers: { 'User-Agent': USER_AGENT, ...headers } });
     } catch (err) {
         return new Response(`Upstream unavailable: ${err.message}`, { status: 502 });
     }

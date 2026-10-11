@@ -1,11 +1,12 @@
-import { fetchJSON, featureCollection, normalizeName } from '../util.js';
+import { cached, fetchJSON, featureCollection, normalizeName } from '../util.js';
 
 // Two ArcGIS Feature Services, merged and de-duplicated by incident name (newest polygon wins):
 //  - FIRIS combo layer: CAL FIRE / FIRIS / USFS intel-flight perimeters. Best coverage for California,
 //    but it keeps every historical polygon per fire and has no containment.
 //  - NIFC WFIGS current perimeters: interagency, includes containment, but sparse for CA.
-const FIRIS = 'https://services1.arcgis.com/jUJYIo9tSA7EHvfZ/arcgis/rest/services/CA_Perimeters_NIFC_FIRIS_public_view/FeatureServer/0/query';
-const WFIGS = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query';
+// Both go through /api/perimeters (vite.config.js / functions/api/perimeters) so they're cached for everyone.
+const FIRIS = '/api/perimeters/firis';
+const WFIGS = '/api/perimeters/wfigs';
 
 function titleCase(name) {
     return name === name.toUpperCase() ? name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : name;
@@ -65,7 +66,9 @@ async function fetchWfigs() {
 }
 
 // Returns the newest perimeter per fire plus the older polygons, which become progression rings.
-export async function fetchPerimeters() {
+export const fetchPerimeters = cached(loadPerimeters, 2 * 60 * 1000);
+
+async function loadPerimeters() {
     const results = await Promise.allSettled([fetchFiris(), fetchWfigs()]);
     const ok = results.filter((r) => r.status === 'fulfilled');
     if (!ok.length) throw results[0].reason;

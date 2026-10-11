@@ -1,12 +1,15 @@
-import { fetchJSON, featureCollection } from '../util.js';
+import { cached, fetchJSON, featureCollection } from '../util.js';
 
 // NWS Red Flag Warnings / Fire Weather Watches. Most of these are zone-based with no geometry
 // of their own, so the affected fire-weather zone polygons are fetched and cached.
-const ALERTS = 'https://api.weather.gov/alerts/active?area=CA&event=Red%20Flag%20Warning,Fire%20Weather%20Watch';
+// Routed through /api/nws (vite.config.js / functions/api/nws) so it's cached for everyone.
+const ALERTS = '/api/nws/alerts/active?area=CA&event=Red%20Flag%20Warning,Fire%20Weather%20Watch';
+const NWS = 'https://api.weather.gov/';
 const MAX_ZONES = 80;
 const zoneCache = new Map();
 
-function fetchZone(url) {
+function fetchZone(zoneUrl) {
+    const url = zoneUrl.replace(NWS, '/api/nws/');
     if (!zoneCache.has(url)) {
         zoneCache.set(url, fetchJSON(url).catch((err) => {
             zoneCache.delete(url);
@@ -16,7 +19,9 @@ function fetchZone(url) {
     return zoneCache.get(url);
 }
 
-export async function fetchFireWeather() {
+export const fetchFireWeather = cached(loadFireWeather, 2 * 60 * 1000);
+
+async function loadFireWeather() {
     const data = await fetchJSON(ALERTS, { headers: { Accept: 'application/geo+json' } });
     const features = [];
     const pending = [];

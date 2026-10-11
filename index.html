@@ -27,6 +27,10 @@
                     </div>
                 </header>
 
+                <button class="notice" data-about="disclaimer">
+                    <strong>Unofficial · information only.</strong> Not for emergency decisions; follow official orders and call 911.
+                    <span class="notice__more">Disclaimer</span>
+                </button>
                 <div id="status" class="status" data-tone="busy">Loading…</div>
                 <div id="fw-banner" class="fw-banner" hidden></div>
 
@@ -86,11 +90,16 @@
                 </section>
 
                 <footer class="sidebar__footer">
-                    Built by <a href="https://www.occiviccoders.com/" target="_blank" rel="noopener">OC Civic Coders</a>.
-                    Data: CAL FIRE · NIFC WFIGS · NASA FIRMS · NWS · Open-Meteo · NOAA HMS · SCE · Cal OES · ALERTCalifornia. Routing: Valhalla (FOSSGIS) · Photon · CHP.
-                    Informational only. For evacuations follow
-                    <a href="https://protect.genasys.com" target="_blank" rel="noopener">Genasys Protect</a>
-                    and official alerts.
+                    <p>
+                        <strong>Unofficial and provided as is, with no warranty.</strong> Data comes from third parties and may be late,
+                        incomplete or wrong. OC Civic Coders accepts no liability for its use. For evacuations follow
+                        <a href="https://protect.genasys.com" target="_blank" rel="noopener">Genasys Protect</a>, official alerts and 911.
+                    </p>
+                    <p class="sidebar__footer-links">
+                        <button class="link-btn" data-about="disclaimer">Full disclaimer</button> ·
+                        <button class="link-btn" data-about="sources">Data sources &amp; credits</button> ·
+                        Built by <a href="https://www.occiviccoders.com/" target="_blank" rel="noopener">OC Civic Coders</a>
+                    </p>
                 </footer>
             </aside>
 
@@ -202,6 +211,82 @@
                 <div class="sheet__body"></div>
             </aside>
         </div>
+        <dialog class="about" id="about" aria-labelledby="about-title">
+            <div class="about__scroll">
+                <section id="about-disclaimer">
+                    <h2 id="about-title">Before you use California Fire Watch</h2>
+                    <p class="about__lead">
+                        We built this to be as accurate and helpful as we can. But it is a volunteer project that only
+                        repackages information published by others, and it is <strong>only as correct as its sources</strong>.
+                    </p>
+                    <ul class="about__terms">
+                        <li><strong>Unofficial.</strong> California Fire Watch is not affiliated with or endorsed by CAL FIRE, the National
+                            Weather Service, NASA, NOAA, CHP, Cal OES, any utility, or any other agency.</li>
+                        <li><strong>Information, not instructions.</strong> Do not use it to decide whether, when, or how to evacuate, and
+                            never wait on it to leave. Follow evacuation orders from law enforcement and fire officials, official alerts
+                            (AlertOC, Genasys Protect, Wireless Emergency Alerts), and <strong>call 911 in an emergency</strong>.</li>
+                        <li><strong>Data can be late, incomplete, or wrong.</strong> Fire perimeters can lag hours behind the fire. Satellite
+                            hotspots can be misplaced, missed, or false alarms. Forecasts are estimates. Suggested routes don't know about
+                            live traffic, unreported closures, or what the fire is doing right now. Any source can go down without notice.</li>
+                        <li><strong>No warranty, no liability.</strong> The app and its data are provided “as is” and “as available,” without
+                            warranties of any kind. To the fullest extent permitted by law, OC Civic Coders and its volunteers and contributors
+                            are not liable for any loss, injury, damage, or decision arising from the use of, or reliance on, this app or its data.</li>
+                        <li><strong>Your call, your responsibility.</strong> By using California Fire Watch you accept these terms.</li>
+                    </ul>
+                </section>
+
+                <section id="about-sources">
+                    <h2>Data sources &amp; credits</h2>
+                    <p class="about__lead">All data belongs to the organizations below. Thank you for publishing it openly.</p>
+                    <dl class="about__sources">
+                        <dt>Fire incidents</dt>
+                        <dd><a href="https://www.fire.ca.gov/incidents" target="_blank" rel="noopener">CAL FIRE</a> public incident feed</dd>
+                        <dt>Fire perimeters</dt>
+                        <dd>CAL FIRE / Cal OES <a href="https://www.caloes.ca.gov/" target="_blank" rel="noopener">FIRIS</a> intel-flight perimeters and
+                            <a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">NIFC WFIGS</a> interagency perimeters</dd>
+                        <dt>Satellite hotspots</dt>
+                        <dd>We acknowledge the use of data from NASA’s <a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noopener">Fire Information
+                            for Resource Management System (FIRMS)</a>, part of NASA’s Earth Science Data and Information System (ESDIS). VIIRS and MODIS active fire detections.</dd>
+                        <dt>Red Flag Warnings &amp; Fire Weather Watches</dt>
+                        <dd><a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a> (NOAA)</dd>
+                        <dt>Wind, temperature &amp; humidity forecasts</dt>
+                        <dd><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>, licensed
+                            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></dd>
+                        <dt>Air quality</dt>
+                        <dd><a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noopener">Open-Meteo Air Quality API</a>, generated using
+                            Copernicus Atmosphere Monitoring Service (CAMS) information</dd>
+                        <dt>Smoke plumes</dt>
+                        <dd><a href="https://www.ospo.noaa.gov/products/land/hms.html" target="_blank" rel="noopener">NOAA NESDIS Hazard Mapping System</a></dd>
+                        <dt>Fire Hazard Severity Zones</dt>
+                        <dd><a href="https://osfm.fire.ca.gov/what-we-do/community-wildfire-preparedness-and-mitigation/fire-hazard-severity-zones" target="_blank" rel="noopener">CAL FIRE Office of the State Fire Marshal</a></dd>
+                        <dt>Power shutoffs &amp; outages</dt>
+                        <dd><a href="https://www.sce.com/outage-center" target="_blank" rel="noopener">Southern California Edison</a> PSPS areas and
+                            <a href="https://www.caloes.ca.gov/" target="_blank" rel="noopener">Cal OES</a> statewide outage data</dd>
+                        <dt>Fire cameras</dt>
+                        <dd><a href="https://alertcalifornia.org/" target="_blank" rel="noopener">ALERTCalifornia</a>, UC San Diego</dd>
+                        <dt>Road closures &amp; crashes</dt>
+                        <dd><a href="https://cad.chp.ca.gov/" target="_blank" rel="noopener">California Highway Patrol</a> live incident feed</dd>
+                        <dt>Route planning</dt>
+                        <dd><a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla</a> public server run by
+                            <a href="https://www.fossgis.de/" target="_blank" rel="noopener">FOSSGIS e.V.</a></dd>
+                        <dt>Address search</dt>
+                        <dd><a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a> by komoot</dd>
+                        <dt>Map data &amp; basemap</dt>
+                        <dd>© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> (ODbL), ©
+                            <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>; satellite imagery © Esri, Maxar, Earthstar Geographics</dd>
+                        <dt>Readiness guidance</dt>
+                        <dd>CAL FIRE <a href="https://readyforwildfire.org/" target="_blank" rel="noopener">Ready for Wildfire</a> (Ready, Set, Go!) and the
+                            <a href="https://www.ocfa.org/" target="_blank" rel="noopener">Orange County Fire Authority</a></dd>
+                        <dt>Software</dt>
+                        <dd><a href="https://maplibre.org/" target="_blank" rel="noopener">MapLibre GL JS</a>, <a href="https://vite.dev/" target="_blank" rel="noopener">Vite</a>.
+                            Source code: <a href="https://github.com/occiviccoders/OCFire" target="_blank" rel="noopener">github.com/occiviccoders/OCFire</a></dd>
+                    </dl>
+                </section>
+            </div>
+            <div class="about__actions">
+                <button class="about__accept" id="about-accept">I understand. Show the map</button>
+            </div>
+        </dialog>
         <script type="module" src="/src/js/main.js"></script>
     </body>
 </html>
