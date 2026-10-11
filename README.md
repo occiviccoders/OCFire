@@ -5,6 +5,9 @@ together public data that normally lives on a dozen different sites (CAL FIRE in
 perimeters, NASA satellite hotspots, Red Flag Warnings, wind, smoke, air quality, power shutoffs, road
 closures, fire cameras) and puts it on one map, with tools to plan a way out and get a home ready.
 
+It's a static site plus a handful of small serverless proxies, hosted for free on **Cloudflare Pages**.
+The [Hosting](#hosting) section walks through exactly how, and how to run it somewhere else.
+
 > **Disclaimer.** California Fire Watch is an unofficial volunteer project. It is information only,
 > provided “as is” with no warranty, and it is only as accurate as the third-party data it shows, which
 > can be late, incomplete, or wrong. Never use it to decide whether, when, or how to evacuate. Follow
@@ -13,7 +16,7 @@ closures, fire cameras) and puts it on one map, with tools to plan a way out and
 
 **Contents:** [What it does](#what-it-does) · [Quick start](#quick-start) · [How it's built](#how-its-built) ·
 [Project layout](#project-layout) · [Feature walkthroughs](#feature-walkthroughs) ·
-[Data sources & API usage](#data-sources--api-usage) · [Deploying](#deploying) ·
+[Data sources & API usage](#data-sources--api-usage) · [Hosting](#hosting) ·
 [Working on the code](#working-on-the-code) · [Credits & license](#credits--license)
 
 ---
@@ -270,27 +273,96 @@ progress is saved in `localStorage`.
 
 ---
 
-## Deploying
+## Hosting
 
-Production runs on **Cloudflare Pages**, in the same Cloudflare account that hosts `occiviccoders.com`.
+### How this site runs, end to end
 
-1. Workers & Pages → Create application → **Continue to Pages** → Import an existing Git repository →
-   `occiviccoders/OCFire`.
-2. Production branch `master`, build command `npm run build`, output directory `dist`.
-3. Settings → Variables and Secrets → add **`FIRMS_MAP_KEY`** (encrypted) for Production and Preview,
-   then redeploy. Without it, `/api/firms` returns 503 and hotspots stay empty.
-4. Custom domains → add a subdomain of `occiviccoders.com`.
+```mermaid
+flowchart LR
+    Dev[Push to master<br/>on GitHub] --> Build["Cloudflare Pages build<br/>npm run build"]
+    Build --> CDN["dist/ on Cloudflare's CDN<br/>(HTML, JS, CSS)"]
+    Build --> Fns["functions/api/*<br/>deployed as Pages Functions"]
+    Secret[(FIRMS_MAP_KEY<br/>encrypted variable)] -.-> Fns
+    Domain[Subdomain of occiviccoders.com<br/>DNS in the same Cloudflare account] --> CDN
+    User((Visitor)) --> Domain
+```
 
-Every push to `master` deploys automatically; other branches get preview URLs. Node is pinned by
-`.node-version`. The build sets `__FIRMS_ENABLED__` from `FIRMS_MAP_KEY` or Cloudflare's `CF_PAGES`
-variable, because the key itself only exists at runtime in the Functions.
+1. **Code** lives in [`occiviccoders/OCFire`](https://github.com/occiviccoders/OCFire). The Cloudflare
+   Pages project is connected to the repo with Cloudflare's GitHub app.
+2. **Every push to `master`** triggers a build on Cloudflare: `npm install`, then `npm run build`, with Node
+   pinned by `.node-version`. Vite writes the static site to `dist/` (`wrangler.toml` tells Pages to
+   serve that folder). Pushes to other branches get their own preview URLs.
+3. **Static files** (`dist/`) are served from Cloudflare's CDN. That's the whole UI: the browser does all
+   the map work.
+4. **`functions/api/`** is deployed alongside as Pages Functions, small serverless handlers that run on
+   Cloudflare's edge. A file's path is its URL: `functions/api/chp.js` answers `/api/chp`,
+   `functions/api/firms/[[path]].js` answers `/api/firms/*`. They proxy the sources that need it,
+   cache the responses at the edge, and keep the FIRMS key off the client (see
+   [Data sources & API usage](#data-sources--api-usage)).
+5. **The FIRMS key** is an encrypted environment variable on the Pages project, read in the function as
+   `context.env.FIRMS_MAP_KEY`. It never appears in the repo or the browser bundle.
+6. **The domain:** `occiviccoders.com` already uses Cloudflare DNS, so adding a subdomain under the
+   project's *Custom domains* tab creates the DNS record and the HTTPS certificate automatically.
+7. **Cost:** $0. The free tier has unlimited static requests and 100,000 Function requests per day;
+   the edge cache keeps the number of Function calls that actually reach upstream servers small.
 
-To test the production Functions locally: put `FIRMS_MAP_KEY=...` in `.dev.vars` (gitignored), then
+### Why Cloudflare Pages
+
+- The domain was already on Cloudflare, so hosting there needed no DNS changes.
+- It has static hosting, serverless functions, secrets, an edge cache, Git-based deploys, and preview
+  URLs in one free product.
+- GitHub Pages (where the 2020 version lived) only serves static files. It can't hide an API key or
+  proxy sources that block browser requests.
+
+### Setting it up from scratch
+
+1. Cloudflare dashboard → **Workers & Pages** → **Create application** → **Continue to Pages** (the Pages
+   flow, not Workers) → **Import an existing Git repository** → pick the repo.
+2. Production branch `master` · Framework preset *None* · Build command `npm run build` · Output directory `dist`.
+3. **Settings → Variables and Secrets** → add `FIRMS_MAP_KEY` (encrypted) for Production and Preview, then
+   **redeploy**. Variables only apply to new deployments; without the key `/api/firms` returns 503.
+4. **Custom domains** → add a subdomain. The domain must be in the same Cloudflare account.
+
+To test the production setup locally: put `FIRMS_MAP_KEY=...` in `.dev.vars` (gitignored), then
 `npm run build && npx wrangler pages dev dist`.
 
-> Note: CAL FIRE's server doesn't send its full certificate chain (Sectigo R46 root). Cloudflare's
-> production network accepts it, but local `wrangler` may not; if `/api/calfire` returns 502 locally,
-> run wrangler with `NODE_EXTRA_CA_CERTS` pointing at that root certificate.
+> CAL FIRE's server doesn't send its full certificate chain (Sectigo R46 root). Cloudflare's production
+> network accepts it, but local `wrangler` may not. If `/api/calfire` returns 502 locally, run wrangler
+> with `NODE_EXTRA_CA_CERTS` pointing at that root certificate.
+
+### What's Cloudflare-specific and what's portable
+
+| Part | Cloudflare-specific? |
+|---|---|
+| Everything in `src/`, `index.html`, the Vite build | No. Plain static files that run on any host. |
+| `vite.config.js` proxies | No. Used for local dev only. |
+| `functions/` folder layout (`[[path]]`, `[source]` file names) | Yes. Pages Functions routing. |
+| `server/proxy.js`: `caches.default`, `context.waitUntil`, `context.env` | Yes. Workers runtime APIs (the `fetch` logic itself is standard). |
+| `wrangler.toml`, the `CF_PAGES` check in `vite.config.js` | Yes. Pages config. |
+
+### Hosting it somewhere else
+
+The app only needs **some server that answers the same `/api/*` paths**. The six routes are listed in
+`vite.config.js` and `functions/api/`.
+
+- **Netlify or Vercel:** move each file in `functions/api/` into their functions format (each one is a few
+  lines that build an upstream URL and call `fetch`). Replace `caches.default` with a
+  `Cache-Control: public, s-maxage=<ttl>` response header so their CDN caches it. Set
+  `FIRMS_MAP_KEY` in their environment settings and `__FIRMS_ENABLED__` accordingly.
+- **Your own server (VPS, Raspberry Pi, Docker):** the simplest path is `npm run build && npm run preview -- --host`
+  behind a reverse proxy. `vite preview` already serves `dist/` with all the proxies from
+  `vite.config.js`. It has no caching, so add it at the reverse proxy (nginx `proxy_cache`) if you expect traffic.
+- **GitHub Pages / any static-only host:** the site loads, but incidents, perimeters, hotspots, Red Flag
+  zones, smoke, and road closures won't, because they all go through `/api/*`. You'd need a separate proxy
+  (for example a Cloudflare Worker) and to point those paths at it.
+
+### Forking it for another area
+
+Most regional settings are in `src/js/config.js`: the map's starting view (`OC_CENTER`, `INITIAL_ZOOM`),
+the hotspot bounding box (`CA_BBOX`), the "Near" list radius (`NEARBY_RADIUS_MI`), the wind grid and state outline mask, and `FORECAST_POINTS` (the
+corridors in the forecast panel). California-only sources (CAL FIRE, FIRIS, CHP, SCE, Cal OES, FHSZ,
+ALERTCalifornia) would need equivalents for another state. FIRMS, NWS, NIFC WFIGS, NOAA HMS, Open-Meteo,
+Valhalla, and Photon all cover the whole US.
 
 ---
 
