@@ -14,7 +14,8 @@ import { fetchSmoke } from './sources/smoke.js';
 import { FHSZ_MIN_ZOOM, fetchZonesInView } from './sources/fhsz.js';
 import { fetchPower } from './sources/power.js';
 import { camerasNear, loadCameras } from './sources/cameras.js';
-import { findUnmatchedHeat } from './earlyDetection.js';
+import { findUnmatchedHeat, INCIDENT_MI, RECENT_HOURS } from './earlyDetection.js';
+import { fetchReportedIncidents } from './sources/reportedIncidents.js';
 import { createIncidentMarkers } from './incidentMarkers.js';
 import { closeSheet, createMapCard, sheetOverlap } from './mapCard.js';
 import { showDisclaimerIfNeeded } from './about.js';
@@ -31,14 +32,14 @@ import { createTimeline } from './wind/timeline.js';
 import { incidentPopup, perimeterPopup, hotspotPopup, fireWeatherPopup, heatPopup, smokePopup, fhszPopup, powerPopup } from './popups.js';
 import { renderStats, renderIncidentList, renderFireWeatherBanner, setStatus, markSourceStatus } from './sidebar.js';
 import { pointInGeometry } from './geo.js';
-import { EMPTY_FC, bboxOf, normalizeName, formatClock, featureCollection, escapeHTML } from './util.js';
+import { EMPTY_FC, bboxOf, normalizeName, formatClock, featureCollection, escapeHTML, distanceMiles } from './util.js';
 
 const state = {
     incidents: EMPTY_FC,
     perimeters: EMPTY_FC,
     hotspots: EMPTY_FC,
     unmatchedHeat: EMPTY_FC,
-    heatContext: { history: [], baseline: null },
+    heatContext: { history: [], baseline: null, reported: null },
     hotspotCount: null,
     fireWeather: EMPTY_FC,
     overlays: { smoke: false, fhsz: false, power: false },
@@ -139,6 +140,25 @@ function windAtFire(coords) {
     return state.wind.forecast ? conditionsAt(state.wind.forecast, state.wind.hour, coords) : null;
 }
 
+// What a single hotspot belongs to: the closest reported fire (CAL FIRE, NIFC, or a mapped perimeter), or
+// nothing — in which case it's either scored as possible new heat or too old to be.
+function hotspotContext(coords, p) {
+    const closest = (features, source) =>
+        features
+            .map((f) => ({ f, distance: distanceMiles(coords, f.geometry.coordinates) }))
+            .filter((x) => x.distance < INCIDENT_MI)
+            .sort((a, b) => a.distance - b.distance)
+            .map(({ f, distance }) => ({ name: f.properties.name, source, distance, discovered: f.properties.started || f.properties.discovered, acres: f.properties.acres }))[0];
+    const perimeter = state.perimeters.features.find((f) => {
+        const [[w, s], [e, n]] = bboxOf(f.geometry);
+        return coords[0] > w - 0.02 && coords[0] < e + 0.02 && coords[1] > s - 0.02 && coords[1] < n + 0.02;
+    });
+    const near = closest(state.incidents.features, 'CAL FIRE')
+        || closest(state.heatContext.reported?.features || [], 'NIFC')
+        || (perimeter && { name: perimeter.properties.name, source: 'mapped perimeter', acres: perimeter.properties.acres });
+    return { near, stale: Date.now() - Date.parse(p.acquired) > RECENT_HOURS * 3600000 };
+}
+
 function updateUnmatchedHeat() {
     state.unmatchedHeat = findUnmatchedHeat(state.hotspots, state.incidents, state.perimeters, {
         ...state.heatContext,
@@ -199,14 +219,16 @@ async function runRefresh() {
         fireWeather: fetchFireWeather(),
         hotspotHistory: hotspotsEnabled ? fetchHotspotHistory() : Promise.resolve([]),
         baseline: hotspotsEnabled ? fetchBaseline() : Promise.resolve(null),
+        reported: fetchReportedIncidents(),
     };
     const names = Object.keys(loaders);
     const settled = await Promise.allSettled(Object.values(loaders));
     const results = Object.fromEntries(names.map((n, i) => [n, settled[i]]));
 
-    const { incidents, perimeters, hotspots, fireWeather, hotspotHistory, baseline } = results;
+    const { incidents, perimeters, hotspots, fireWeather, hotspotHistory, baseline, reported } = results;
     state.heatContext.history = hotspotHistory.value || [];
     state.heatContext.baseline = baseline.value || null;
+    if (reported.status === 'fulfilled') state.heatContext.reported = reported.value;
     if (fireWeather.status === 'fulfilled') state.fireWeather = fireWeather.value;
     if (incidents.status === 'fulfilled') state.incidents = incidents.value;
     if (perimeters.status === 'fulfilled') {
@@ -360,7 +382,7 @@ function setOverlay(name, on) {
 function wireInteractions() {
     const clickTargets = [
         ['heat-ring', (f) => heatPopup(f.properties, camerasNear(f.geometry.coordinates), f.geometry.coordinates)],
-        ['hotspots-core', (f) => hotspotPopup(f.properties)],
+        ['hotspots-core', (f) => hotspotPopup(f.properties, hotspotContext(f.geometry.coordinates, f.properties), f.geometry.coordinates)],
         ['power-points', (f) => powerPopup(f.properties)],
         ['perimeters-fill', (f) => {
             if (f.properties.incidentId) setSelection(f.properties.incidentId);

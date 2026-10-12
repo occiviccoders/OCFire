@@ -3,7 +3,7 @@ import { pointInGeometry } from './geo.js';
 import { historyAt } from './sources/baseline.js';
 import { compass } from './wind/fireWeather.js';
 
-const RECENT_HOURS = 12;
+export const RECENT_HOURS = 12;
 export const CLUSTER_MI = 1.25;
 // Heat this close to a known fire is assumed to be that fire.
 export const INCIDENT_MI = 5;
@@ -100,11 +100,12 @@ export function assess(cluster, info, { past, priorDays, wind, redFlag }) {
 // context.history: [{ coords, day }] detections from the previous 5 days (see fetchHotspotHistory).
 // context.baseline: one-year cell history (see fetchBaseline). context.windAt(coords): current conditions.
 // context.fireWeather: NWS Red Flag Warning / Fire Weather Watch polygons.
-export function findUnmatchedHeat(hotspots, incidents, perimeters, { history = [], baseline = null, windAt = () => null, fireWeather = null } = {}) {
+// context.reported: NIFC incident locations (see sources/reportedIncidents.js), treated like CAL FIRE incidents.
+export function findUnmatchedHeat(hotspots, incidents, perimeters, { history = [], baseline = null, windAt = () => null, fireWeather = null, reported = null } = {}) {
     const redFlags = (fireWeather?.features || []).filter((f) => f.properties.event === 'Red Flag Warning');
     const cutoff = Date.now() - RECENT_HOURS * 3600000;
     const known = perimeters.features.map((f) => bboxOf(f.geometry));
-    const incidentPoints = incidents.features.map((f) => f.geometry.coordinates);
+    const incidentPoints = [...incidents.features, ...(reported?.features || [])].map((f) => f.geometry.coordinates);
 
     const loose = hotspots.features.filter((f) => {
         const c = f.geometry.coordinates;

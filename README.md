@@ -179,7 +179,10 @@ src/sass/                   Styles (abstracts + one partial per UI area)
 ### Possible new fires (`earlyDetection.js`)
 
 1. Take hotspots from the last 12 h.
-2. Drop any within 5 mi of a CAL FIRE incident or inside a padded perimeter bounding box.
+2. Drop any within 5 mi of a CAL FIRE incident or a NIFC WFIGS incident location (`sources/reportedIncidents.js`,
+   which also covers small initial-attack fires CAL FIRE doesn't list publicly), or inside a padded perimeter
+   bounding box. Older or matched hotspots still show as plain dots; their popup says which reported fire they
+   belong to, or that they're unmatched but too old to score.
 3. Cluster the rest (single-link, 1.25 mi).
 4. Rate each cluster: **likely** if it has at least two of three signals (3+ detections, seen by more
    than one satellite, any high-confidence detection), otherwise **possible**; or **persistent** if the

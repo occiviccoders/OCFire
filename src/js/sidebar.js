@@ -74,7 +74,7 @@ export function renderIncidentList(incidents, selectedId, onSelect, heat = null,
         ? list.map((p) => incidentItem(p, selectedId)).join('')
         : `<li class="incident-list__empty">No active incidents in California.</li>`;
     const heatHTML = heatList.length
-        ? `<li class="incident-list__group" title="Satellite heat with no CAL FIRE incident or perimeter within 5 miles">Unconfirmed satellite heat</li>${heatList.map(heatItem).join('')}`
+        ? `<li class="incident-list__group" title="Satellite heat from the last 12 hours with no reported fire (CAL FIRE or NIFC) or perimeter within 5 miles">Unconfirmed satellite heat</li>${heatList.map(heatItem).join('')}`
         : '';
     ul.innerHTML = incidentsHTML + heatHTML;
 

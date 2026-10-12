@@ -88,7 +88,22 @@ export function perimeterPopup(p) {
         </div>`;
 }
 
-export function hotspotPopup(p) {
+// context: { near: { name, source, distance?, discovered?, acres? } | undefined, stale } from main.js.
+function hotspotContextHTML({ near, stale } = {}) {
+    if (near) {
+        const facts = [
+            near.distance != null ? `${near.distance < 0.1 ? '<0.1' : near.distance.toFixed(1)} mi away` : 'inside or next to its perimeter',
+            near.discovered ? `discovered ${formatDateTime(near.discovered)}` : '',
+            near.acres != null ? `${near.acres < 1 ? '<1' : Math.round(near.acres).toLocaleString()} ac` : '',
+        ].filter(Boolean);
+        return `<p class="popup__summary">Part of a reported fire: <strong>${e(near.name)}</strong> (${e(near.source)}). ${facts.join(' · ')}.</p>`;
+    }
+    return stale
+        ? `<p class="popup__summary">Not near any reported fire. It's more than 12 hours old, so it's no longer scored as possible new heat.</p>`
+        : `<p class="popup__summary">Not near any reported fire. It's included in the possible-new-fire marker here.</p>`;
+}
+
+export function hotspotPopup(p, context, coords) {
     return `
         <div class="popup">
             <div class="popup__eyebrow">Satellite detection · ${e(p.instrument)} (${e(p.satellite)})</div>
@@ -98,7 +113,8 @@ export function hotspotPopup(p) {
                 <div><dt>Confidence</dt><dd>${e(p.confidence)}</dd></div>
                 <div><dt>Pass</dt><dd>${p.daynight === 'D' ? 'Day' : 'Night'}</dd></div>
             </dl>
-            <p class="popup__meta">Detected ${timeAgo(p.acquired)}</p>
+            ${context ? hotspotContextHTML(context) : ''}
+            <p class="popup__meta">Detected ${timeAgo(p.acquired)} (${e(formatDateTime(p.acquired))})${coords ? ` · <a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">track history</a>` : ''}</p>
         </div>`;
 }
 
@@ -172,7 +188,7 @@ export function heatPopup(p, cameras, coords) {
                 <div><dt>Satellites</dt><dd>${p.satellites}</dd></div>
                 <div><dt>Peak power</dt><dd>${Number(p.maxFrp).toFixed(0)} MW</dd></div>
             </dl>
-            <p class="popup__summary">First seen ${timeAgo(p.first)}, latest ${timeAgo(p.latest)}. No CAL FIRE incident or mapped perimeter within 5 miles.</p>
+            <p class="popup__summary">First seen ${timeAgo(p.first)}, latest ${timeAgo(p.latest)}. No reported fire (CAL FIRE or NIFC) or mapped perimeter within 5 miles.</p>
             ${unusualHTML(p)}
             ${detectionRecordHTML(p, coords)}
             <p class="popup__meta">Could be a new fire not yet reported, an agricultural or prescribed burn, or an industrial heat source. Nearby cameras, if any, are listed below.</p>

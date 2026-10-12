@@ -30,7 +30,8 @@ const MATCH_BEFORE_MS = 24 * HOUR; // incident start may precede first detection
 const MATCH_AFTER_MS = 72 * HOUR;
 const CHP_MI = 3;
 const RECURRING_PAST_DAYS = 15;
-const WFIGS = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query';
+// Year-to-date, not "Current": contained incidents drop out of Current, and we need their later updates.
+const WFIGS = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_YearToDate/FeatureServer/0/query';
 
 const iso = (ms) => new Date(ms).toISOString();
 const utcDay = (ms) => iso(ms).slice(0, 10);
