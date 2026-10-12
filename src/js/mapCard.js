@@ -111,6 +111,19 @@ export function createMapCard(map, options) {
 }
 
 sheet.querySelector('.sheet__close').addEventListener('click', closeSheet);
+
+// "Copy" buttons inside cards (e.g. detection coordinates), in both popups and the sheet.
+document.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('[data-copy]');
+    if (!btn) return;
+    try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        btn.textContent = 'Copied';
+    } catch {
+        btn.textContent = 'Copy failed';
+    }
+    setTimeout(() => (btn.textContent = 'Copy'), 1500);
+});
 document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && !sheet.hidden) closeSheet();
 });

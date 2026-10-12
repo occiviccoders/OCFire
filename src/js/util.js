@@ -88,6 +88,10 @@ export function timeAgo(date) {
     return `${Math.round(hrs / 24)}d ago`;
 }
 
+export function formatDateTime(date) {
+    return new Date(date).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+}
+
 export function formatClock(date) {
     return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }

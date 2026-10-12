@@ -139,6 +139,8 @@ vite.config.js              Dev/preview proxies for /api/* (mirror of functions/
 wrangler.toml               Cloudflare Pages config (build output = dist)
 functions/api/              Cloudflare Pages Functions (production proxies), one file per source
 server/proxy.js             Shared proxy: GET only, edge cache, User-Agent, error handling
+scripts/build-baseline.mjs  Rebuilds public/hotspot-baseline.json (one year of satellite heat per ~1 km cell)
+public/                     Static files copied as-is into the build (the hotspot baseline)
 src/js/
   main.js                   Orchestrator: state, refresh loops, map setup, click handling
   config.js                 Map defaults, bounding boxes, wind grid, forecast corridors
@@ -149,7 +151,7 @@ src/js/
   sidebar.js                Stats, incident list, status line, Red Flag banner
   mapCard.js                Popup on desktop, bottom sheet on phones
   about.js                  Disclaimer + credits dialog (first-visit acceptance)
-  earlyDetection.js         Clusters unexplained satellite heat into possible new fires
+  earlyDetection.js         Clusters unexplained satellite heat into possible new fires and scores them
   geo.js / util.js          Point-in-polygon, distances, formatting, fetchJSON, cached()
   sources/                  One module per data feed; each returns GeoJSON or plain data
   wind/                     Wind particles, arrows, HDW layer, timeline, forecast panel, fire-weather math
@@ -180,8 +182,34 @@ src/sass/                   Styles (abstracts + one partial per UI area)
 4. Rate each cluster: **likely** if it has at least two of three signals (3+ detections, seen by more
    than one satellite, any high-confidence detection), otherwise **possible**; or **persistent** if the
    spot was hot on ≥ 2 of the previous 5 days within 0.6 mi, which catches refinery flares and power plants. Persistent heat is drawn gray and left out of the list.
+5. Score how much each cluster **stands out** (`assess()`), as a points tally with every reason shown on the card:
+
+   | Signal | Points |
+   |---|---|
+   | No satellite heat within ~1 km in the past year (baseline) | +2 |
+   | Rarely hot here (1–3 days in the past year) | +1 |
+   | Hot 15+ days last year, or NASA flags it as an industrial source | −2 |
+   | Hot on 2+ of the previous 5 days | −2 |
+   | 3+ detections · more than one satellite · high confidence · 20+ MW | +1 each |
+   | Inside a Red Flag Warning · elevated or red-flag-level weather at the spot | +1 each |
+   | Later satellite passes sit downwind of the first (≥ 0.3 mi, within 45° of the wind) | +2 |
+
+   5+ is **High**, 3–4 **Moderate**, otherwise **Low**. It's a ranking aid, not a calibrated probability:
+   there's no labeled history behind the weights yet, so the app never shows a percentage.
 
 These can still be agricultural or prescribed burns. They're leads, not confirmed fires.
+
+#### The one-year baseline (`scripts/build-baseline.mjs`, `public/hotspot-baseline.json`)
+
+A static file with how many days each ~1 km cell (0.01°) in California had satellite heat over the past
+year, which months, and whether NASA classified it as a static industrial source. `npm run baseline`
+rebuilds it (start `npm run dev` first; requests go through the app's own FIRMS proxy so the key stays
+server-side). It pulls VIIRS on Suomi-NPP and NOAA-20, using the standard-processing archive where it
+exists and near-real-time data for recent months, about 150 requests and under a minute. The window ends
+5 days before the build date so live detections never count as their own history. Rerun it monthly.
+
+The browser loads it once a day (about 50 KB compressed), and `sources/baseline.js` looks up the busiest
+cell in the 3×3 neighborhood around each cluster. No database or server job is involved.
 
 ### Wind and fire weather (`wind/`, `sources/weather.js`)
 
@@ -233,6 +261,7 @@ progress is saved in `localStorage`.
 | Fire incidents | CAL FIRE | `/api/calfire` | Edge 2 min, client 1 min |
 | Fire perimeters | CAL FIRE FIRIS + NIFC WFIGS (ArcGIS) | `/api/perimeters/{firis,wfigs}` | Edge 2 min, client 2 min |
 | Satellite hotspots | NASA FIRMS (VIIRS ×3 + MODIS) | `/api/firms` (key added server-side) | Edge 5 min, client 2 min; 5-day history client 3 h |
+| Hotspot baseline | Static file built from NASA FIRMS | `/hotspot-baseline.json` | Client 24 h; rebuilt monthly by script |
 | Red Flag Warnings / Watches | NWS | `/api/nws` | Edge 2 min (zone outlines 1 day), client 2 min |
 | Smoke plumes | NOAA HMS | `/api/hms` | Edge 10 min, client 10 min |
 | Road closures / crashes | CHP | `/api/chp` | Edge 1 min, client 2 min |

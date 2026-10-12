@@ -539,6 +539,63 @@
         line-height: 1.4;
     }
 
+    &__unusual {
+        padding: 0.8rem 1rem;
+        border-radius: 0.6rem;
+        background: $panel-2;
+        border-left: 3px solid $text-dim;
+
+        &--high { border-left-color: $redflag; }
+        &--moderate { border-left-color: $watch; }
+    }
+
+    &__unusual-head {
+        font-size: 1.25rem;
+        margin-bottom: 0.4rem;
+    }
+
+    &__reasons {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 1.15rem;
+        line-height: 1.35;
+
+        li::before {
+            display: inline-block;
+            width: 1.3rem;
+            font-weight: 700;
+        }
+
+        .reason--alert::before { content: '▲'; color: $redflag; font-size: 0.9rem; }
+        .reason--watch::before { content: '+'; color: $watch; }
+        .reason--info::before { content: '·'; color: $text-dim; }
+        .reason--calm::before { content: '−'; color: $ok; }
+    }
+
+    &__fine {
+        margin-top: 0.5rem;
+        font-size: 1.05rem;
+        color: $text-dim;
+    }
+
+    &__record {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.2rem 1rem;
+        font-size: 1.15rem;
+        font-variant-numeric: tabular-nums;
+
+        div { display: contents; }
+        dt { color: $text-dim; }
+    }
+
+    &__copy {
+        margin-left: 0.4rem;
+        font-size: 1.1rem;
+    }
+
     &__stage {
         display: flex;
         flex-direction: column;

@@ -551,4 +551,11 @@
         margin-left: auto;
         color: $text-dim;
     }
+
+    &__unusual {
+        font-weight: 600;
+
+        &--high { color: $redflag; }
+        &--moderate { color: $watch; }
+    }
 }

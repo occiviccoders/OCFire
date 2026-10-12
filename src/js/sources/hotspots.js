@@ -25,8 +25,12 @@ function normalizeConfidence(raw) {
     return n >= 80 ? 'high' : n < 30 ? 'low' : 'nominal';
 }
 
+// FIRMS day ranges are UTC calendar days, so "1" empties out at 00:00 UTC (5 PM in California).
+// Ask for two and keep the last 24 hours.
+const WINDOW_MS = 24 * 3600000;
+
 async function fetchSensor(sensor) {
-    const res = await fetch(`/api/firms/${sensor}/${CA_BBOX.join(',')}/1`);
+    const res = await fetch(`/api/firms/${sensor}/${CA_BBOX.join(',')}/2`);
     if (!res.ok) throw new Error(`FIRMS ${sensor}: ${res.status}`);
     return parseCSV(await res.text()).map((r) => {
         const t = r.acq_time.padStart(4, '0');
@@ -52,7 +56,8 @@ async function loadHotspots() {
     const results = await Promise.allSettled(SENSORS.map(fetchSensor));
     const ok = results.filter((r) => r.status === 'fulfilled');
     if (!ok.length) throw results[0].reason;
-    const features = ok.flatMap((r) => r.value).filter((f) => f.properties.confidence !== 'low');
+    const since = Date.now() - WINDOW_MS;
+    const features = ok.flatMap((r) => r.value).filter((f) => f.properties.confidence !== 'low' && Date.parse(f.properties.acquired) >= since);
     return featureCollection(features);
 }
 

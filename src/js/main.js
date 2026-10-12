@@ -8,6 +8,7 @@ import { addBasemapLayers, addFireLayers, addHazardLayers, animateActiveEdge, an
 import { fetchPerimeters, linkPerimeters } from './sources/perimeters.js';
 import { fetchIncidents } from './sources/incidents.js';
 import { fetchHotspotHistory, fetchHotspots, hotspotsEnabled } from './sources/hotspots.js';
+import { fetchBaseline } from './sources/baseline.js';
 import { fetchFireWeather } from './sources/fireWeather.js';
 import { fetchSmoke } from './sources/smoke.js';
 import { FHSZ_MIN_ZOOM, fetchZonesInView } from './sources/fhsz.js';
@@ -37,6 +38,7 @@ const state = {
     perimeters: EMPTY_FC,
     hotspots: EMPTY_FC,
     unmatchedHeat: EMPTY_FC,
+    heatContext: { history: [], baseline: null },
     hotspotCount: null,
     fireWeather: EMPTY_FC,
     overlays: { smoke: false, fhsz: false, power: false },
@@ -117,12 +119,25 @@ function selectHeat(id) {
     if (!feature) return;
     const coords = feature.geometry.coordinates;
     incidentCard.remove();
-    popup.setLngLat(coords).setHTML(heatPopup(feature.properties, camerasNear(coords))).addTo(map, { pan: false });
-    map.flyTo({ center: coords, zoom: 11, padding: { top: 0, bottom: sheetOverlap(map), left: 0, right: 0 }, duration: 1200, essential: true });
+    popup.setLngLat(coords).setHTML(heatPopup(feature.properties, camerasNear(coords), coords)).addTo(map, { pan: false });
+    // On desktop, sit the spot low enough that the card above it has room.
+    const overlap = sheetOverlap(map);
+    const top = overlap ? 0 : Math.min(360, map.getContainer().clientHeight * 0.4);
+    map.flyTo({ center: coords, zoom: 11, padding: { top, bottom: overlap, left: 0, right: 0 }, duration: 1200, essential: true });
 }
 
 function windAtFire(coords) {
     return state.wind.forecast ? conditionsAt(state.wind.forecast, state.wind.hour, coords) : null;
+}
+
+function updateUnmatchedHeat() {
+    state.unmatchedHeat = findUnmatchedHeat(state.hotspots, state.incidents, state.perimeters, {
+        ...state.heatContext,
+        fireWeather: state.fireWeather,
+        // Scored on current conditions, not the timeline hour.
+        windAt: (coords) => (state.wind.forecast ? conditionsAt(state.wind.forecast, 0, coords) : null),
+    });
+    map.getSource('unmatched-heat').setData(state.unmatchedHeat);
 }
 
 function setSelection(id) {
@@ -174,12 +189,16 @@ async function runRefresh() {
         hotspots: hotspotsEnabled ? fetchHotspots() : Promise.resolve(null),
         fireWeather: fetchFireWeather(),
         hotspotHistory: hotspotsEnabled ? fetchHotspotHistory() : Promise.resolve([]),
+        baseline: hotspotsEnabled ? fetchBaseline() : Promise.resolve(null),
     };
     const names = Object.keys(loaders);
     const settled = await Promise.allSettled(Object.values(loaders));
     const results = Object.fromEntries(names.map((n, i) => [n, settled[i]]));
 
-    const { incidents, perimeters, hotspots, fireWeather, hotspotHistory } = results;
+    const { incidents, perimeters, hotspots, fireWeather, hotspotHistory, baseline } = results;
+    state.heatContext.history = hotspotHistory.value || [];
+    state.heatContext.baseline = baseline.value || null;
+    if (fireWeather.status === 'fulfilled') state.fireWeather = fireWeather.value;
     if (incidents.status === 'fulfilled') state.incidents = incidents.value;
     if (perimeters.status === 'fulfilled') {
         state.perimeters = linkPerimeters(perimeters.value.current, state.incidents);
@@ -193,12 +212,10 @@ async function runRefresh() {
         state.hotspotCount = hotspots.value.features.length;
         map.getSource('hotspots').setData(hotspots.value);
     }
-    state.unmatchedHeat = findUnmatchedHeat(state.hotspots, state.incidents, state.perimeters, hotspotHistory.value || []);
-    map.getSource('unmatched-heat').setData(state.unmatchedHeat);
+    updateUnmatchedHeat();
     if (state.overlays.smoke) loadOverlay('smoke');
     if (state.overlays.power) loadOverlay('power');
     if (fireWeather.status === 'fulfilled') {
-        state.fireWeather = fireWeather.value;
         map.getSource('fireweather').setData(fireWeather.value);
         const overOC = fireWeather.value.features.filter((f) => pointInGeometry(OC_CENTER, f.geometry));
         const worst = overOC.find((f) => f.properties.event === 'Red Flag Warning') || overOC[0];
@@ -262,6 +279,8 @@ async function refreshWind() {
         timeline.setTimes(forecast.times, state.wind.series[state.wind.ocPoint]);
         setWindHour(Math.min(state.wind.hour, forecast.times.length - 1));
         updateWindVisibility();
+        updateUnmatchedHeat();
+        renderList();
         markSourceStatus({ wind: { status: 'fulfilled' } });
         refreshAir();
     } catch (err) {
@@ -331,7 +350,7 @@ function setOverlay(name, on) {
 
 function wireInteractions() {
     const clickTargets = [
-        ['heat-ring', (f) => heatPopup(f.properties, camerasNear(f.geometry.coordinates))],
+        ['heat-ring', (f) => heatPopup(f.properties, camerasNear(f.geometry.coordinates), f.geometry.coordinates)],
         ['hotspots-core', (f) => hotspotPopup(f.properties)],
         ['power-points', (f) => powerPopup(f.properties)],
         ['perimeters-fill', (f) => {

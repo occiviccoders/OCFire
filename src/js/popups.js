@@ -1,4 +1,4 @@
-import { escapeHTML as e, formatAcres, formatPercent, formatMiles, timeAgo } from './util.js';
+import { escapeHTML as e, formatAcres, formatDateTime, formatPercent, formatMiles, timeAgo } from './util.js';
 import { containmentColor, containmentStage, summarize } from './explain.js';
 import { compass, downwind } from './wind/fireWeather.js';
 import { FHSZ_MEANING } from './sources/fhsz.js';
@@ -113,7 +113,30 @@ export function fireWeatherPopup(p) {
         </div>`;
 }
 
-export function heatPopup(p, cameras) {
+const UNUSUAL_LABEL = { high: 'High', moderate: 'Moderate', low: 'Low' };
+
+function unusualHTML(p) {
+    if (!p.unusual) return '';
+    const reasons = typeof p.reasons === 'string' ? JSON.parse(p.reasons) : p.reasons || [];
+    return `
+        <div class="popup__unusual popup__unusual--${p.unusual}">
+            <div class="popup__unusual-head">Stands out: <strong>${UNUSUAL_LABEL[p.unusual]}</strong></div>
+            <ul class="popup__reasons">${reasons.map((r) => `<li class="reason--${r.tone}">${e(r.text)}</li>`).join('')}</ul>
+            <p class="popup__fine">A ranking from satellite history and current weather, not a probability of fire.</p>
+        </div>`;
+}
+
+function detectionRecordHTML(p, coords) {
+    const where = coords ? `${coords[1].toFixed(4)}, ${coords[0].toFixed(4)}` : '';
+    return `
+        <dl class="popup__record">
+            <div><dt>First pass</dt><dd>${e(formatDateTime(p.first))}</dd></div>
+            <div><dt>Latest pass</dt><dd>${e(formatDateTime(p.latest))}</dd></div>
+            ${where ? `<div><dt>Location</dt><dd>${where} <button class="link-btn popup__copy" data-copy="${where}">Copy</button></dd></div>` : ''}
+        </dl>`;
+}
+
+export function heatPopup(p, cameras, coords) {
     if (p.strength === 'persistent') {
         return `
             <div class="popup">
@@ -121,6 +144,7 @@ export function heatPopup(p, cameras) {
                 <h3 class="popup__title">Persistent heat source</h3>
                 <p class="popup__summary">Satellites saw heat here on ${p.priorDays} of the previous 5 days, so this is most likely a fixed source — a refinery flare, power plant, or landfill — rather than a new fire.</p>
                 <p class="popup__meta">${p.count} detection${p.count === 1 ? '' : 's'} today, latest ${timeAgo(p.latest)}.</p>
+                ${detectionRecordHTML(p, coords)}
             </div>`;
     }
     const likely = p.strength === 'likely';
@@ -134,6 +158,8 @@ export function heatPopup(p, cameras) {
                 <div><dt>Peak power</dt><dd>${Number(p.maxFrp).toFixed(0)} MW</dd></div>
             </dl>
             <p class="popup__summary">First seen ${timeAgo(p.first)}, latest ${timeAgo(p.latest)}. No CAL FIRE incident or mapped perimeter within 5 miles.</p>
+            ${unusualHTML(p)}
+            ${detectionRecordHTML(p, coords)}
             <p class="popup__meta">Could be a new fire not yet reported, an agricultural or prescribed burn, or an industrial heat source. Nearby cameras, if any, are listed below.</p>
             ${camerasHTML(cameras)}
         </div>`;
