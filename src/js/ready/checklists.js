@@ -144,7 +144,6 @@ export const CHECKLISTS = [
             {
                 title: 'Be ready',
                 items: [
-                    ['r-report', 'If you see smoke or flames, call 911 right away — don’t assume someone else has'],
                     ['r-psps', 'Expect a possible power shutoff: charge phones, have flashlights and a cooler ready'],
                     ['r-bag', 'Put the go bag in the car and keep the tank half full'],
                     ['r-cushions', 'Bring patio cushions, doormats and brooms inside'],

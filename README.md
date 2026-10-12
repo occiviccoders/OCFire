@@ -11,9 +11,9 @@ The [Hosting](#hosting) section walks through exactly how, and how to run it som
 
 > **Disclaimer.** California Fire Watch is an unofficial volunteer project. It is information only,
 > provided “as is” with no warranty, and it is only as accurate as the third-party data it shows, which
-> can be late, incomplete, or wrong. Never use it to decide whether, when, or how to evacuate. Follow
-> official orders, alerts, and 911. Initial Apps LLC, OC Civic Coders, and their contributors accept no
-> liability for its use.
+> can be late, incomplete, or wrong. Never use it to decide whether, when, or how to evacuate; official
+> orders and alerts always take priority. Initial Apps LLC, OC Civic Coders, and their contributors accept
+> no liability for its use.
 > The full text is shown in the app on first visit (`index.html`, `#about`).
 
 **Contents:** [What it does](#what-it-does) · [Quick start](#quick-start) · [How it's built](#how-its-built) ·

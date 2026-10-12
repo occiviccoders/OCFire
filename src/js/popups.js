@@ -134,7 +134,7 @@ export function heatPopup(p, cameras) {
                 <div><dt>Peak power</dt><dd>${Number(p.maxFrp).toFixed(0)} MW</dd></div>
             </dl>
             <p class="popup__summary">First seen ${timeAgo(p.first)}, latest ${timeAgo(p.latest)}. No CAL FIRE incident or mapped perimeter within 5 miles.</p>
-            <p class="popup__meta">Could be a new fire not yet reported, an agricultural or prescribed burn, or an industrial heat source. Check the nearest cameras; if you see smoke, call 911.</p>
+            <p class="popup__meta">Could be a new fire not yet reported, an agricultural or prescribed burn, or an industrial heat source. Nearby cameras, if any, are listed below.</p>
             ${camerasHTML(cameras)}
         </div>`;
 }

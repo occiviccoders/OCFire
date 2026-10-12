@@ -202,7 +202,7 @@ export function createPlanner(map, getContext, { onOpen = () => {} } = {}) {
                     </button>
                     <a class="route__link" href="${googleMapsLink(r)}" target="_blank" rel="noopener">Open this route in Google Maps →</a>
                 </li>`)
-            .join('') + '<li class="route__caveat">Based on current data only. Conditions change fast — if officials direct you elsewhere, go their way.</li>';
+            .join('') + '<li class="route__caveat">Based on current data only. Conditions change fast, and official directions take priority.</li>';
         list.querySelectorAll('[data-route]').forEach((btn) => btn.addEventListener('click', () => selectRoute(Number(btn.dataset.route), { fit: true })));
     }
 
