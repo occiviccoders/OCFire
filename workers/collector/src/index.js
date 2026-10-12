@@ -172,6 +172,10 @@ async function fetchCalfire(site, now) {
                 county: p.County,
                 started: new Date(p.Started).toISOString(),
                 acres: p.AcresBurned ?? null,
+                contained: p.PercentContained ?? null,
+                active: p.IsActive ? 1 : 0,
+                out_at: p.ExtinguishedDate ? new Date(p.ExtinguishedDate).toISOString() : null,
+                url: p.Url || null,
                 updated: p.Updated ? new Date(p.Updated).toISOString() : null,
             };
         });
@@ -181,7 +185,10 @@ async function fetchWfigs(now) {
     const since = iso(now - 30 * DAY).slice(0, 19).replace('T', ' ');
     const params = new URLSearchParams({
         where: `POOState='US-CA' AND IncidentTypeCategory='WF' AND FireDiscoveryDateTime >= TIMESTAMP '${since}'`,
-        outFields: 'IrwinID,IncidentName,FireDiscoveryDateTime,CreatedOnDateTime_dt,IncidentSize,POOCounty,ModifiedOnDateTime_dt',
+        outFields: [
+            'IrwinID', 'IncidentName', 'FireDiscoveryDateTime', 'CreatedOnDateTime_dt', 'IncidentSize', 'PercentContained',
+            'ContainmentDateTime', 'ControlDateTime', 'FireOutDateTime', 'FireCause', 'POOCounty', 'ModifiedOnDateTime_dt',
+        ].join(','),
         f: 'geojson',
         resultRecordCount: '2000',
     });
@@ -201,6 +208,12 @@ async function fetchWfigs(now) {
                 started: iso(p.FireDiscoveryDateTime),
                 reported: p.CreatedOnDateTime_dt ? iso(p.CreatedOnDateTime_dt) : null,
                 acres: p.IncidentSize ?? null,
+                contained: p.PercentContained ?? null,
+                active: p.FireOutDateTime ? 0 : 1,
+                contained_at: p.ContainmentDateTime ? iso(p.ContainmentDateTime) : null,
+                controlled_at: p.ControlDateTime ? iso(p.ControlDateTime) : null,
+                out_at: p.FireOutDateTime ? iso(p.FireOutDateTime) : null,
+                cause: p.FireCause || null,
                 updated: p.ModifiedOnDateTime_dt ? iso(p.ModifiedOnDateTime_dt) : null,
             };
         });
@@ -235,13 +248,29 @@ async function batch(db, statements, size = 50) {
     return results;
 }
 
+// Upserts the latest incident state and logs a history row whenever size, containment or active status changes.
 async function upsertIncidents(db, incidents, nowIso, firstRunAt) {
+    const { results: known } = await db.prepare('SELECT id, acres, contained, active FROM incidents').all();
+    const previous = new Map(known.map((r) => [r.id, r]));
     const sql = db.prepare(`
-        INSERT INTO incidents (id, source, name, lat, lng, county, started, reported, first_seen, preexisting, acres, updated)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+        INSERT INTO incidents (id, source, name, lat, lng, county, started, reported, first_seen, preexisting, acres, updated,
+            contained, active, contained_at, controlled_at, out_at, url, cause)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
         ON CONFLICT (id) DO UPDATE SET name = excluded.name, lat = excluded.lat, lng = excluded.lng,
-            started = excluded.started, reported = excluded.reported, acres = excluded.acres, updated = excluded.updated`);
-    await batch(db, incidents.map((i) => sql.bind(i.id, i.source, i.name, i.lat, i.lng, i.county, i.started, i.reported ?? null, nowIso, i.started < firstRunAt ? 1 : 0, i.acres, i.updated)));
+            started = excluded.started, reported = excluded.reported, acres = excluded.acres, updated = excluded.updated,
+            contained = excluded.contained, active = excluded.active, contained_at = excluded.contained_at,
+            controlled_at = excluded.controlled_at, out_at = excluded.out_at, url = excluded.url, cause = excluded.cause`);
+    const history = db.prepare('INSERT INTO incident_history (incident_id, at, acres, contained, active) VALUES (?, ?, ?, ?, ?)');
+    const statements = [];
+    for (const i of incidents) {
+        const before = previous.get(i.id);
+        const fields = [i.contained ?? null, i.active ?? null, i.contained_at ?? null, i.controlled_at ?? null, i.out_at ?? null, i.url ?? null, i.cause ?? null];
+        statements.push(sql.bind(i.id, i.source, i.name, i.lat, i.lng, i.county, i.started, i.reported ?? null, nowIso, i.started < firstRunAt ? 1 : 0, i.acres, i.updated, ...fields));
+        if (!before || before.acres !== i.acres || before.contained !== (i.contained ?? null) || before.active !== (i.active ?? null)) {
+            statements.push(history.bind(i.id, i.updated || nowIso, i.acres, i.contained ?? null, i.active ?? null));
+        }
+    }
+    await batch(db, statements);
 }
 
 async function insertDetections(db, detections, nowIso) {
@@ -472,8 +501,10 @@ const TRACKS_SQL = `
     SELECT t.*,
         (SELECT MIN(taken_at) FROM snapshots s WHERE s.track_id = t.id AND s.level IN ('moderate', 'high')) AS moderate_known_at,
         (SELECT MIN(taken_at) FROM snapshots s WHERE s.track_id = t.id AND s.level = 'high') AS strong_known_at,
-        (SELECT reported FROM incidents i WHERE i.id = t.incident_id) AS incident_reported
-    FROM tracks t ORDER BY t.last_seen DESC LIMIT 5000`;
+        i.reported AS incident_reported, i.acres AS incident_acres, i.contained AS incident_contained,
+        i.active AS incident_active, i.contained_at AS incident_contained_at, i.out_at AS incident_out_at
+    FROM tracks t LEFT JOIN incidents i ON i.id = t.incident_id
+    ORDER BY t.last_seen DESC LIMIT 5000`;
 
 async function trackDetail(db, id) {
     const [track, snapshots, detections] = await Promise.all([
@@ -482,8 +513,13 @@ async function trackDetail(db, id) {
         db.prepare('SELECT lat, lng, acquired, satellite, instrument, confidence, frp, collected_at FROM detections WHERE track_id = ? ORDER BY acquired LIMIT 1000').bind(id).all(),
     ]);
     if (!track) return null;
-    const incident = track.incident_id ? await db.prepare('SELECT * FROM incidents WHERE id = ?').bind(track.incident_id).first() : null;
-    return { track, incident, snapshots: snapshots.results, detections: detections.results };
+    const [incident, history] = track.incident_id
+        ? await Promise.all([
+            db.prepare('SELECT * FROM incidents WHERE id = ?').bind(track.incident_id).first(),
+            db.prepare('SELECT at, acres, contained, active FROM incident_history WHERE incident_id = ? ORDER BY at, id').bind(track.incident_id).all(),
+        ])
+        : [null, { results: [] }];
+    return { track, incident, history: history.results, snapshots: snapshots.results, detections: detections.results };
 }
 
 const API_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' };

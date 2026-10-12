@@ -36,10 +36,13 @@ export function mountReplay(container, { track, incident, snapshots, detections,
     const dets = detections.map((d) => ({ ...d, t: Date.parse(d.acquired) }));
     const snaps = snapshots.map((s) => ({ ...s, t: Date.parse(s.pass_time) }));
     // The collector's own timestamps are about this system, not the fire, so they stay out of the replay.
-    const marks = events.filter((ev) => ev.kind !== 'collector').map((ev) => ({ ...ev, t: Date.parse(ev.at) }));
+    // Later containment updates can come weeks after the heat; they only show if they fall inside the
+    // window set by the detections and the original report.
+    const fireEvents = events.filter((ev) => ev.kind !== 'collector').map((ev) => ({ ...ev, t: Date.parse(ev.at) }));
     const start = Math.min(...dets.map((d) => d.t), Date.parse(track.first_seen));
     const firstHeat = Date.parse(track.first_seen);
-    const end = Math.max(start + HOUR, ...marks.map((m) => m.t));
+    const end = Math.max(start + HOUR, ...fireEvents.filter((m) => !m.lifecycle).map((m) => m.t));
+    const marks = fireEvents.filter((m) => m.t <= end);
     const t0 = start - 0.03 * (end - start);
     const t1 = end + 0.03 * (end - start);
 

@@ -93,9 +93,27 @@ CREATE TABLE IF NOT EXISTS incidents (
     first_seen TEXT NOT NULL,        -- when the collector first saw it in the feed
     preexisting INTEGER NOT NULL DEFAULT 0,
     acres REAL,
-    updated TEXT
+    updated TEXT,
+    contained REAL,                  -- percent contained
+    active INTEGER,                  -- 1 while the agency lists it as active
+    contained_at TEXT,               -- WFIGS ContainmentDateTime
+    controlled_at TEXT,              -- WFIGS ControlDateTime
+    out_at TEXT,                     -- WFIGS FireOutDateTime / CAL FIRE ExtinguishedDate
+    url TEXT,                        -- official incident page (CAL FIRE)
+    cause TEXT
 );
 CREATE INDEX IF NOT EXISTS incidents_started ON incidents (started);
+
+-- One row each time an incident's size, containment or active status changes (at = agency update time).
+CREATE TABLE IF NOT EXISTS incident_history (
+    id INTEGER PRIMARY KEY,
+    incident_id TEXT NOT NULL,
+    at TEXT NOT NULL,
+    acres REAL,
+    contained REAL,
+    active INTEGER
+);
+CREATE INDEX IF NOT EXISTS incident_history_incident ON incident_history (incident_id, at);
 
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,

@@ -229,7 +229,13 @@ itself doesn't depend on it. Every 15 minutes it:
 - records when each track first reached Moderate and Strong;
 - labels outcomes from CAL FIRE and NIFC WFIGS incidents: `fire` if one starts within 3 mi between 24 h
   before and 72 h after first detection (with whether it predates the track), `known_fire` if the track
-  started on an existing fire, otherwise `not_reported` or `recurring` after 72 h quiet.
+  started on an existing fire, otherwise `not_reported` or `recurring` after 72 h quiet;
+- keeps each incident's official status current (acres, percent contained, active, contained / controlled /
+  out dates, cause, CAL FIRE page) and logs a row in `incident_history` whenever size, containment or
+  active status changes.
+
+Schema changes for an existing database live in `workers/collector/migrations/` (apply each once with
+`npx wrangler d1 execute ocfire-research --remote --file migrations/<file>.sql`).
 
 Data lives in the D1 database `ocfire-research`. The Worker also serves a small read-only JSON API
 (`/api/status`, `/api/tracks`, `/api/tracks/:id`), and opening its root URL in a browser redirects to the
@@ -243,7 +249,9 @@ reached Moderate or Strong, plus misses), new hotspots per day by peak signal, a
 with CSV download, and a per-track view: a replay map (`labReplay.js`, loaded on demand) with a time
 slider that plays back detections, wind and the reported incident; an event timeline (satellite passes,
 score changes, official discovery and record-created times, and when the collector saw each); reasons;
-and every snapshot's conditions. `/lab?track=<id>` links straight to one track. For local work,
+and every snapshot's conditions. `/lab?track=<id>` links straight to one track, and `/lab?near=lat,lng`
+opens the most recent track near a point (heat popups on the map link here). Going the other way,
+"Open on fire map" uses `/?at=lat,lng&zoom=13&label=…`, which starts the main map on that spot with a marker. For local work,
 run the collector with `npx wrangler dev` and start Vite with `VITE_LAB_API=http://localhost:8787`.
 
 ```bash

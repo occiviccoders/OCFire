@@ -133,7 +133,15 @@ body.lab {
     }
 }
 
+.lab-sub {
+    font-size: 1.15rem;
+    margin-top: 0.2rem;
+}
+
 .lab-btn {
+    color: $text;
+    text-decoration: none;
+    font-size: 1.3rem;
     background: $panel-2;
     border: 1px solid $border;
     border-radius: 0.6rem;

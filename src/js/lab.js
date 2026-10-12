@@ -62,10 +62,28 @@ function statusBadge(status) {
     return `<span class="lab-status lab-status--${e(status)}">${STATUS[status] || e(status)}</span>`;
 }
 
-function mapLink(lat, lng) {
-    const href = `https://www.google.com/maps/@?api=1&map_action=map&center=${lat},${lng}&zoom=14&basemap=satellite`;
-    return `<a href="${href}" target="_blank" rel="noopener" data-stop>${lat.toFixed(3)}, ${lng.toFixed(3)}</a>`;
+const fireMapHref = (t) => `/?at=${t.lat.toFixed(5)},${t.lng.toFixed(5)}&zoom=13&label=${encodeURIComponent(`Track #${t.id}`)}`;
+
+function mapLink(t) {
+    return `<a href="${fireMapHref(t)}" title="Open on the fire map" data-stop>${t.lat.toFixed(3)}, ${t.lng.toFixed(3)}</a>`;
 }
+
+const satelliteHref = (lat, lng) => `https://www.google.com/maps/@?api=1&map_action=map&center=${lat},${lng}&zoom=15&basemap=satellite`;
+
+// Agency status for a matched incident: { acres, contained, active, contained_at, out_at }.
+function fireStatus(i) {
+    if (!i) return '';
+    const state = i.out_at ? 'Out' : i.contained >= 100 || i.contained_at ? 'Contained' : i.active === 0 ? 'No longer active' : 'Active';
+    const parts = [state];
+    if (i.acres != null) parts.push(`${i.acres < 1 ? '<1' : Math.round(i.acres).toLocaleString()} ac`);
+    if (i.contained != null && !i.out_at && i.contained < 100) parts.push(`${Math.round(i.contained)}% contained`);
+    return parts.join(' · ');
+}
+
+const trackFireStatus = (t) =>
+    t.incident_id
+        ? fireStatus({ acres: t.incident_acres, contained: t.incident_contained, active: t.incident_active, contained_at: t.incident_contained_at, out_at: t.incident_out_at })
+        : '';
 
 function renderHealth() {
     const { totals, recentRuns } = state.status;
@@ -109,6 +127,8 @@ function renderScorecard() {
     const early = timed.filter((t) => t.moderate_known_at && new Date(t.moderate_known_at) <= new Date(reportedAt(t)));
     const missed = fires.filter((t) => !isElevated(t));
     const resolvedCount = fresh.filter((t) => RESOLVED.has(t.status)).length;
+    const large = fires.filter((t) => t.incident_acres >= 10);
+    const largeFlagged = large.filter(isElevated);
 
     $('#scorecard').innerHTML = `
         <div class="lab-table-wrap">
@@ -120,6 +140,7 @@ function renderScorecard() {
         <ul class="lab-facts">
             <li><strong>${early.length} of ${timed.length}</strong> reported fires reached Moderate before the agency's listed start time.</li>
             <li><strong>${missed.length} of ${fires.length}</strong> reported fires never got past Weak (misses worth studying).</li>
+            <li><strong>${largeFlagged.length} of ${large.length}</strong> reported fires that grew to 10+ acres reached Moderate or Strong.</li>
             <li class="lab-dim">Hit rate = share of resolved tracks that turned out to be a reported fire. Lead time compares when the
                 collector first saw the signal with the agency's start time; fires already listed before collection began are excluded.</li>
             ${resolvedCount < 30 ? '<li class="lab-dim">Still early: these numbers mean more once a few hundred tracks have resolved.</li>' : ''}
@@ -179,8 +200,8 @@ function renderTracks() {
             <tr data-id="${t.id}">
                 <td>${t.id}</td>
                 <td>${shortDate(t.first_seen)}</td>
-                <td>${mapLink(t.lat, t.lng)}</td>
-                <td>${statusBadge(t.status)}</td>
+                <td>${mapLink(t)}</td>
+                <td>${statusBadge(t.status)}${t.incident_id ? `<div class="lab-dim lab-sub">${e(trackFireStatus(t))}</div>` : ''}</td>
                 <td>${levelBadge(t.peak_level)}</td>
                 <td>${t.passes}</td>
                 <td>${t.detections}</td>
@@ -234,7 +255,32 @@ function formatSpan(ms) {
 
 // Everything known about one track, in time order: satellite passes, score changes, agency times, and
 // when the collector itself saw each piece.
-function timelineEvents(t, incident, snapshots, detections, summary) {
+const acresText = (a) => `${a < 1 ? '<1' : Math.round(a).toLocaleString()} ac`;
+
+// Size / containment / status changes the agency published after the fire was reported.
+function lifecycleEvents(incident, history) {
+    const events = [];
+    let prev = null;
+    for (const h of history) {
+        const changes = [];
+        if (!prev) {
+            if (h.acres != null) changes.push(`Size listed: ${acresText(h.acres)}`);
+            if (h.contained != null) changes.push(`${Math.round(h.contained)}% contained`);
+        } else {
+            if (h.acres != null && h.acres !== prev.acres) changes.push(`${h.acres > (prev.acres ?? 0) ? 'Grew to' : 'Size revised to'} ${acresText(h.acres)}`);
+            if (h.contained != null && h.contained !== prev.contained) changes.push(`${Math.round(h.contained)}% contained`);
+            if (h.active === 0 && prev.active === 1) changes.push('No longer listed as active');
+        }
+        if (changes.length) events.push({ at: h.at, kind: 'official', lifecycle: true, title: changes.join(' · ') });
+        prev = h;
+    }
+    if (incident?.contained_at) events.push({ at: incident.contained_at, kind: 'official', lifecycle: true, title: 'Officially contained' });
+    if (incident?.controlled_at) events.push({ at: incident.controlled_at, kind: 'official', lifecycle: true, title: 'Officially controlled' });
+    if (incident?.out_at) events.push({ at: incident.out_at, kind: 'official', lifecycle: true, title: 'Declared out' });
+    return events;
+}
+
+function timelineEvents(t, incident, history, snapshots, detections, summary) {
     const events = [];
     const passes = new Map();
     for (const d of detections) {
@@ -275,6 +321,7 @@ function timelineEvents(t, incident, snapshots, detections, summary) {
             title: 'Collector first saw the incident report',
             detail: incident.preexisting ? 'Already listed when collection began' : '',
         });
+        events.push(...lifecycleEvents(incident, history));
     }
     return events.sort((a, b) => a.at.localeCompare(b.at) || KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
 }
@@ -341,20 +388,26 @@ async function showDetail(id) {
         panel.innerHTML = `<p class="lab-error">Couldn't load track ${id}: ${e(err.message)}</p>`;
         return;
     }
-    const { track: t, incident, snapshots, detections } = data;
+    const { track: t, incident, history = [], snapshots, detections } = data;
     const summary = state.tracks.find((r) => r.id === t.id) || t;
     const latest = snapshots[snapshots.length - 1];
-    const events = timelineEvents(t, incident, snapshots, detections, summary);
+    const events = timelineEvents(t, incident, history, snapshots, detections, summary);
     state.unmountReplay?.();
     state.unmountReplay = null;
 
     panel.innerHTML = `
         <div class="lab-card__head">
             <h2 class="lab-card__title">Track #${t.id} ${statusBadge(t.status)} ${levelBadge(t.peak_level)}</h2>
-            <button class="lab-btn" data-close>Close</button>
+            <div class="lab-filters">
+                <a class="lab-btn" href="${fireMapHref(t)}">Open on fire map</a>
+                <button class="lab-btn" data-close>Close</button>
+            </div>
         </div>
         <dl class="lab-dl">
-            <div><dt>Location</dt><dd>${mapLink(t.lat, t.lng)}</dd></div>
+            <div><dt>Location</dt><dd>${t.lat.toFixed(4)}, ${t.lng.toFixed(4)} ·
+                <a href="${satelliteHref(t.lat, t.lng)}" target="_blank" rel="noopener">satellite view</a></dd></div>
+            ${incident ? `<div><dt>Fire status</dt><dd>${e(fireStatus(incident))}${incident.cause ? ` <span class="lab-dim">· cause: ${e(incident.cause)}</span>` : ''}
+                ${incident.url ? ` · <a href="${e(incident.url)}" target="_blank" rel="noopener">official page</a>` : ''}</dd></div>` : ''}
             <div><dt>First pass</dt><dd>${shortDate(t.first_seen)}</dd></div>
             <div><dt>Latest pass</dt><dd>${shortDate(t.last_seen)}</dd></div>
             <div><dt>Detections / passes</dt><dd>${t.detections} / ${t.passes}</dd></div>
@@ -417,6 +470,14 @@ function downloadCSV() {
     URL.revokeObjectURL(url);
 }
 
+// `?near=lat,lng` (linked from heat popups on the fire map): the most recent track within ~2 miles.
+function nearestTrackId(near) {
+    const [lat, lng] = (near || '').split(',').map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const close = state.tracks.filter((t) => Math.abs(t.lat - lat) < 0.03 && Math.abs(t.lng - lng) < 0.035);
+    return close.sort((a, b) => b.last_seen.localeCompare(a.last_seen))[0]?.id ?? null;
+}
+
 async function init() {
     try {
         [state.status, state.tracks] = await Promise.all([getJSON('/api/status'), getJSON('/api/tracks')]);
@@ -445,7 +506,8 @@ async function init() {
         document.querySelectorAll('#tracks tr.is-selected').forEach((tr) => tr.classList.remove('is-selected'));
     });
 
-    const id = Number(new URLSearchParams(location.search).get('track'));
+    const params = new URLSearchParams(location.search);
+    const id = Number(params.get('track')) || nearestTrackId(params.get('near'));
     if (id) showDetail(id);
 }
 

@@ -31,7 +31,7 @@ import { createTimeline } from './wind/timeline.js';
 import { incidentPopup, perimeterPopup, hotspotPopup, fireWeatherPopup, heatPopup, smokePopup, fhszPopup, powerPopup } from './popups.js';
 import { renderStats, renderIncidentList, renderFireWeatherBanner, setStatus, markSourceStatus } from './sidebar.js';
 import { pointInGeometry } from './geo.js';
-import { EMPTY_FC, bboxOf, normalizeName, formatClock, featureCollection } from './util.js';
+import { EMPTY_FC, bboxOf, normalizeName, formatClock, featureCollection, escapeHTML } from './util.js';
 
 const state = {
     incidents: EMPTY_FC,
@@ -50,11 +50,21 @@ const state = {
 showDisclaimerIfNeeded();
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
+// `?at=lat,lng&zoom=13&label=…` opens the map on one spot (used by links from the Model lab).
+function linkedFocus() {
+    const params = new URLSearchParams(location.search);
+    const [lat, lng] = (params.get('at') || '').split(',').map(Number);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const zoom = Number(params.get('zoom'));
+    return { coords: [lng, lat], zoom: Number.isFinite(zoom) && zoom > 0 ? Math.min(zoom, 16) : 12, label: (params.get('label') || '').slice(0, 60) };
+}
+const focus = linkedFocus();
+
 const map = new maplibregl.Map({
     container: 'map',
     style: BASEMAPS.dark,
-    center: OC_CENTER,
-    zoom: INITIAL_ZOOM,
+    center: focus?.coords ?? OC_CENTER,
+    zoom: focus?.zoom ?? INITIAL_ZOOM,
     attributionControl: { compact: true },
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
@@ -464,6 +474,12 @@ map.on('load', () => {
         onPlanFrom: (coords, label) => planner.openAt(coords, label),
     });
     timeline = createTimeline(setWindHour);
+    if (focus) {
+        const el = document.createElement('div');
+        el.className = 'focus-marker';
+        el.innerHTML = `<span class="focus-marker__ring"></span>${focus.label ? `<span class="focus-marker__label">${escapeHTML(focus.label)}</span>` : ''}`;
+        new maplibregl.Marker({ element: el }).setLngLat(focus.coords).addTo(map);
+    }
     wireInteractions();
     wireControls();
     if (!hotspotsEnabled) setGroupVisibility(map, 'hotspots', false);

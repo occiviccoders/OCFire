@@ -147,6 +147,7 @@ function detectionRecordHTML(p, coords) {
             <div><dt>First pass</dt><dd>${e(formatDateTime(p.first))}</dd></div>
             <div><dt>Latest pass</dt><dd>${e(formatDateTime(p.latest))}</dd></div>
             ${where ? `<div><dt>Location</dt><dd>${where} <button class="link-btn popup__copy" data-copy="${where}">Copy</button></dd></div>` : ''}
+            ${where ? `<div><dt>History</dt><dd><a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">Track timeline in the Model lab</a></dd></div>` : ''}
         </dl>`;
 }
 
