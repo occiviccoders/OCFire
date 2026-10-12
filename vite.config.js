@@ -53,6 +53,7 @@ export default defineConfig(({ mode }) => {
             // On Cloudflare Pages (CF_PAGES is set in its build) the key lives in the Functions env instead.
             __FIRMS_ENABLED__: JSON.stringify(Boolean(firmsKey || env.CF_PAGES)),
         },
+        build: { rollupOptions: { input: { main: 'index.html', lab: 'lab.html' } } },
         server: { proxy },
         preview: { proxy },
     };

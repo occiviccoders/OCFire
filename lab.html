@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>Model lab · California Fire Watch</title>
+        <meta name="robots" content="noindex">
+        <meta name="theme-color" content="#0d0f12">
+    </head>
+    <body class="lab">
+        <header class="lab__header">
+            <div>
+                <a class="lab__back" href="/">← California Fire Watch</a>
+                <h1 class="lab__title">Model lab</h1>
+                <p class="lab__sub">
+                    How well the "fire signal" on unconfirmed satellite heat predicts reported fires. Every hotspot in
+                    California is tracked from its first satellite pass, scored as data arrives, and later matched against
+                    CAL FIRE and NIFC incident reports. Research only.
+                </p>
+            </div>
+            <div class="lab__health" id="health">Loading…</div>
+        </header>
+
+        <main class="lab__main">
+            <section class="lab-card">
+                <h2 class="lab-card__title">Scorecard</h2>
+                <p class="lab-card__hint">
+                    New hotspots only (tracks that started on an already-reported fire are left out). A track is
+                    <em>resolved</em> once it's matched to a reported fire, or after 72 hours without new heat.
+                </p>
+                <div id="scorecard"></div>
+            </section>
+
+            <section class="lab-card">
+                <h2 class="lab-card__title">New hotspots per day</h2>
+                <p class="lab-card__hint">Pacific time, by first satellite pass. Bar color is the strongest signal the track reached.</p>
+                <div id="daily"></div>
+            </section>
+
+            <section class="lab-card lab-card--wide">
+                <div class="lab-card__head">
+                    <h2 class="lab-card__title">Tracks</h2>
+                    <div class="lab-filters">
+                        <select id="filter-status" aria-label="Status">
+                            <option value="new">All new hotspots</option>
+                            <option value="fire">Became a reported fire</option>
+                            <option value="not_reported">No report (resolved)</option>
+                            <option value="recurring">Recurring heat</option>
+                            <option value="active">Still active</option>
+                            <option value="known_fire">On a known fire</option>
+                            <option value="all">Everything</option>
+                        </select>
+                        <select id="filter-signal" aria-label="Signal">
+                            <option value="any">Any signal</option>
+                            <option value="moderate">Moderate or Strong</option>
+                            <option value="high">Strong</option>
+                        </select>
+                        <button id="download" class="lab-btn">Download CSV</button>
+                    </div>
+                </div>
+                <div class="lab-table-wrap lab-table-wrap--tall">
+                    <table class="lab-table" id="tracks">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>First pass</th>
+                                <th>Location</th>
+                                <th>Outcome</th>
+                                <th>Peak signal</th>
+                                <th>Passes</th>
+                                <th>Detections</th>
+                                <th>Max FRP</th>
+                                <th>Moderate flagged</th>
+                                <th>Reported as</th>
+                                <th>Lead time</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="lab-card lab-card--wide" id="detail" hidden></section>
+        </main>
+
+        <script type="module" src="/src/js/lab.js"></script>
+    </body>
+</html>

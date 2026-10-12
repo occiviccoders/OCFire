@@ -457,18 +457,52 @@ async function collect(env) {
 async function status(db) {
     const [byStatus, runs, totals] = await Promise.all([
         db.prepare('SELECT status, COUNT(*) AS n FROM tracks GROUP BY status').all(),
-        db.prepare('SELECT * FROM runs ORDER BY id DESC LIMIT 5').all(),
-        db.prepare('SELECT (SELECT COUNT(*) FROM detections) AS detections, (SELECT COUNT(*) FROM snapshots) AS snapshots, (SELECT COUNT(*) FROM incidents) AS incidents').first(),
+        db.prepare('SELECT * FROM runs ORDER BY id DESC LIMIT 12').all(),
+        db.prepare(`SELECT (SELECT COUNT(*) FROM detections) AS detections, (SELECT COUNT(*) FROM snapshots) AS snapshots,
+            (SELECT COUNT(*) FROM incidents) AS incidents, (SELECT COUNT(*) FROM runs) AS runs,
+            (SELECT MIN(started_at) FROM runs) AS since`).first(),
     ]);
     return { totals, tracks: Object.fromEntries(byStatus.results.map((r) => [r.status, r.n])), recentRuns: runs.results };
 }
+
+// When each track's signal first reached a level as the collector saw it (snapshot time, not pass time),
+// which is what an alert could actually have used.
+const TRACKS_SQL = `
+    SELECT t.*,
+        (SELECT MIN(taken_at) FROM snapshots s WHERE s.track_id = t.id AND s.level IN ('moderate', 'high')) AS moderate_known_at,
+        (SELECT MIN(taken_at) FROM snapshots s WHERE s.track_id = t.id AND s.level = 'high') AS strong_known_at
+    FROM tracks t ORDER BY t.last_seen DESC LIMIT 5000`;
+
+async function trackDetail(db, id) {
+    const [track, snapshots, detections] = await Promise.all([
+        db.prepare('SELECT * FROM tracks WHERE id = ?').bind(id).first(),
+        db.prepare('SELECT * FROM snapshots WHERE track_id = ? ORDER BY pass_time, id').bind(id).all(),
+        db.prepare('SELECT lat, lng, acquired, satellite, confidence, frp FROM detections WHERE track_id = ? ORDER BY acquired LIMIT 1000').bind(id).all(),
+    ]);
+    return track && { track, snapshots: snapshots.results, detections: detections.results };
+}
+
+const API_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=60' };
+const json = (data, status = 200) => Response.json(data, { status, headers: API_HEADERS });
 
 export default {
     async scheduled(_event, env, ctx) {
         ctx.waitUntil(collect(env).then((s) => console.log('collect', JSON.stringify(s))));
     },
     async fetch(request, env) {
-        if (new URL(request.url).pathname !== '/') return new Response('Not found', { status: 404 });
-        return Response.json(await status(env.DB));
+        const { pathname } = new URL(request.url);
+        if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
+        if (pathname === '/') {
+            if ((request.headers.get('Accept') || '').includes('text/html')) return Response.redirect(`${env.SITE}/lab`, 302);
+            return json(await status(env.DB));
+        }
+        if (pathname === '/api/status') return json(await status(env.DB));
+        if (pathname === '/api/tracks') return json((await env.DB.prepare(TRACKS_SQL).all()).results);
+        const match = pathname.match(/^\/api\/tracks\/(\d+)$/);
+        if (match) {
+            const detail = await trackDetail(env.DB, Number(match[1]));
+            return detail ? json(detail) : json({ error: 'Not found' }, 404);
+        }
+        return new Response('Not found', { status: 404 });
     },
 };

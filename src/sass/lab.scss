@@ -1,0 +1,477 @@
+@use 'abstracts/variables' as *;
+@use 'components/base';
+
+body.lab {
+    overflow: auto;
+    line-height: 1.5;
+}
+
+.lab__header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    justify-content: space-between;
+    align-items: flex-start;
+    max-width: 128rem;
+    margin: 0 auto;
+    padding: 2.4rem 2rem 1rem;
+}
+
+.lab__back {
+    font-size: 1.3rem;
+    color: $text-dim;
+    text-decoration: none;
+
+    &:hover {
+        color: $text;
+    }
+}
+
+.lab__title {
+    font-size: 2.6rem;
+    margin: 0.4rem 0;
+}
+
+.lab__sub {
+    max-width: 68rem;
+    color: $text-dim;
+}
+
+.lab__health {
+    background: $panel;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 1.2rem 1.4rem;
+    font-size: 1.3rem;
+    color: $text-dim;
+    min-width: 28rem;
+}
+
+.lab-health__row + .lab-health__row {
+    margin-top: 0.3rem;
+}
+
+.lab-health__warn {
+    color: $watch;
+    cursor: help;
+}
+
+.lab-dot {
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+    background: $ok;
+    margin-right: 0.4rem;
+
+    &--stale {
+        background: $fire-hot;
+    }
+}
+
+.lab__main {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(42rem, 1fr));
+    gap: 1.6rem;
+    max-width: 128rem;
+    margin: 0 auto;
+    padding: 1rem 2rem 4rem;
+
+    @media (max-width: 480px) {
+        grid-template-columns: 1fr;
+        padding: 1rem 1rem 3rem;
+    }
+}
+
+.lab-card {
+    background: $panel;
+    border: 1px solid $border;
+    border-radius: $radius;
+    padding: 1.6rem;
+    min-width: 0;
+
+    &--wide {
+        grid-column: 1 / -1;
+    }
+
+    &__head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    &__title {
+        font-size: 1.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        flex-wrap: wrap;
+    }
+
+    &__hint {
+        color: $text-dim;
+        font-size: 1.3rem;
+        margin: 0.4rem 0 1.2rem;
+    }
+}
+
+.lab-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+
+    select {
+        font: inherit;
+        color: $text;
+        background: $panel-2;
+        border: 1px solid $border;
+        border-radius: 0.6rem;
+        padding: 0.5rem 0.8rem;
+    }
+}
+
+.lab-btn {
+    background: $panel-2;
+    border: 1px solid $border;
+    border-radius: 0.6rem;
+    padding: 0.5rem 1rem;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+}
+
+.lab-table-wrap {
+    overflow-x: auto;
+}
+
+.lab-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.3rem;
+    white-space: nowrap;
+
+    th,
+    td {
+        text-align: left;
+        padding: 0.7rem 0.9rem;
+        border-bottom: 1px solid $border;
+    }
+
+    thead th {
+        color: $text-dim;
+        font-weight: 500;
+        position: sticky;
+        top: 0;
+        background: $panel;
+    }
+
+    tbody tr[data-id] {
+        cursor: pointer;
+
+        &:hover {
+            background: $panel-2;
+        }
+
+        &.is-selected {
+            background: rgba($fire-warm, 0.12);
+        }
+    }
+
+    &--score {
+        white-space: normal;
+
+        tbody th {
+            font-weight: 500;
+        }
+    }
+}
+
+.lab-table-wrap--tall {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.lab-empty {
+    color: $text-dim;
+    text-align: center !important;
+    padding: 2rem !important;
+}
+
+.lab-dim {
+    color: $text-dim;
+}
+
+.lab-error {
+    color: $fire-hot;
+}
+
+.lab-facts {
+    list-style: none;
+    margin-top: 1.2rem;
+    font-size: 1.3rem;
+
+    li + li {
+        margin-top: 0.5rem;
+    }
+}
+
+.lab-badge {
+    display: inline-block;
+    font-size: 1.15rem;
+    font-weight: 600;
+    padding: 0.1rem 0.7rem;
+    border-radius: 99rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: $text-dim;
+
+    &--moderate {
+        background: rgba($watch, 0.16);
+        color: $watch;
+    }
+
+    &--high {
+        background: rgba($redflag, 0.16);
+        color: $redflag;
+    }
+}
+
+.lab-status {
+    font-size: 1.25rem;
+
+    &::before {
+        content: '';
+        display: inline-block;
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+        background: $fire-out;
+    }
+
+    &--fire::before {
+        background: $fire-hot;
+    }
+
+    &--active::before {
+        background: $fire-near;
+    }
+
+    &--not_reported::before {
+        background: $ok;
+    }
+
+    &--recurring::before {
+        background: #7aa2ff;
+    }
+}
+
+// Daily chart
+.lab-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.3rem;
+    height: 18rem;
+    padding: 0 1.4rem 2.2rem;
+}
+
+.lab-bar {
+    position: relative;
+    flex: 1 0 1.4rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+
+    &__stack {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        height: 100%;
+        border-radius: 0.3rem 0.3rem 0 0;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    &__seg {
+        display: block;
+
+        &--low {
+            background: $fire-out;
+        }
+
+        &--moderate {
+            background: $watch;
+        }
+
+        &--high {
+            background: $redflag;
+        }
+    }
+
+    &__fire {
+        position: absolute;
+        top: -0.2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1rem;
+        font-weight: 700;
+        color: #fff;
+        background: $fire-hot;
+        border-radius: 99rem;
+        padding: 0 0.4rem;
+    }
+
+    &__label {
+        position: absolute;
+        bottom: -1.8rem;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1rem;
+        color: $text-dim;
+        white-space: nowrap;
+        display: none;
+    }
+
+    &:nth-child(7n + 2) .lab-bar__label {
+        display: block;
+    }
+}
+
+.lab-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.4rem;
+    font-size: 1.2rem;
+    color: $text-dim;
+    margin-top: 0.8rem;
+
+    i {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 0.2rem;
+        margin-right: 0.5rem;
+        vertical-align: -0.1rem;
+    }
+
+    .lab-bar__fire {
+        position: static;
+        transform: none;
+        margin-right: 0.5rem;
+    }
+}
+
+// Track detail
+.lab-dl {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+    gap: 1rem 2rem;
+    margin: 0.4rem 0 1.6rem;
+
+    dt {
+        font-size: 1.2rem;
+        color: $text-dim;
+    }
+}
+
+.lab-h3 {
+    font-size: 1.4rem;
+    margin: 1.8rem 0 0.8rem;
+}
+
+.lab-chart {
+    width: 100%;
+    height: auto;
+    max-height: 26rem;
+    background: $panel-2;
+    border-radius: 0.6rem;
+
+    &__line {
+        fill: none;
+        stroke: $text;
+        stroke-width: 2;
+    }
+
+    &__pt {
+        fill: $fire-out;
+
+        &--moderate {
+            fill: $watch;
+        }
+
+        &--high {
+            fill: $redflag;
+        }
+    }
+
+    &__strong,
+    &__moderate,
+    &__zero {
+        stroke-dasharray: 4 4;
+        stroke-width: 1;
+    }
+
+    &__strong {
+        stroke: rgba($redflag, 0.6);
+    }
+
+    &__moderate {
+        stroke: rgba($watch, 0.6);
+    }
+
+    &__zero {
+        stroke: rgba(255, 255, 255, 0.15);
+    }
+
+    &__reported {
+        stroke: $fire-hot;
+        stroke-width: 2;
+    }
+
+    &__label,
+    &__tick {
+        font-size: 11px;
+        fill: $text-dim;
+    }
+
+    &__label--reported {
+        fill: $fire-hot;
+    }
+}
+
+.lab-reasons {
+    list-style: none;
+    font-size: 1.3rem;
+
+    &__item {
+        padding-left: 1.6rem;
+        position: relative;
+
+        &::before {
+            content: '';
+            position: absolute;
+            left: 0.2rem;
+            top: 0.65rem;
+            width: 0.7rem;
+            height: 0.7rem;
+            border-radius: 50%;
+            background: $fire-out;
+        }
+
+        &--alert::before {
+            background: $redflag;
+        }
+
+        &--watch::before {
+            background: $watch;
+        }
+
+        &--calm::before {
+            background: $ok;
+        }
+    }
+}

@@ -135,6 +135,7 @@ incident markers but below popups.
 
 ```
 index.html                  Page shell: sidebar, map, drawers, bottom sheet, disclaimer dialog
+lab.html                    Model lab research page (src/js/lab.js, src/sass/lab.scss)
 vite.config.js              Dev/preview proxies for /api/* (mirror of functions/)
 wrangler.toml               Cloudflare Pages config (build output = dist)
 functions/api/              Cloudflare Pages Functions (production proxies), one file per source
@@ -230,8 +231,18 @@ itself doesn't depend on it. Every 15 minutes it:
   before and 72 h after first detection (with whether it predates the track), `known_fire` if the track
   started on an existing fire, otherwise `not_reported` or `recurring` after 72 h quiet.
 
-Data lives in the D1 database `ocfire-research`. `GET https://ocfire-collector.initial-apps.workers.dev/`
-returns counts and the last few runs.
+Data lives in the D1 database `ocfire-research`. The Worker also serves a small read-only JSON API
+(`/api/status`, `/api/tracks`, `/api/tracks/:id`), and opening its root URL in a browser redirects to the
+**Model lab** page.
+
+#### Model lab (`lab.html`, `src/js/lab.js`)
+
+A separate research page at [/lab](https://ocfire.pages.dev/lab), linked quietly from the sidebar footer
+and not indexed. It shows collector health, a scorecard (hit rate and median lead time for tracks that
+reached Moderate or Strong, plus misses), new hotspots per day by peak signal, a filterable track table
+with CSV download, and a per-track timeline (score by satellite pass against the agency's start time,
+reasons, and every snapshot's conditions). `/lab?track=<id>` links straight to one track. For local work,
+run the collector with `npx wrangler dev` and start Vite with `VITE_LAB_API=http://localhost:8787`.
 
 ```bash
 cd workers/collector
