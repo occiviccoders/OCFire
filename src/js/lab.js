@@ -223,6 +223,100 @@ function scoreChart(snapshots, track) {
         </svg>`;
 }
 
+const SATELLITES = { N: 'Suomi NPP', N20: 'NOAA-20', N21: 'NOAA-21', T: 'Terra', A: 'Aqua', Terra: 'Terra', Aqua: 'Aqua' };
+const SOURCES = { wfigs: 'NIFC', calfire: 'CAL FIRE' };
+const KIND_ORDER = { heat: 0, model: 1, official: 2, collector: 3 };
+
+function formatSpan(ms) {
+    const mins = Math.round(Math.abs(ms) / 60000);
+    return mins < 60 ? `${mins}m` : mins < 48 * 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${(mins / 1440).toFixed(1)} days`;
+}
+
+// Everything known about one track, in time order: satellite passes, score changes, agency times, and
+// when the collector itself saw each piece.
+function timelineEvents(t, incident, snapshots, detections, summary) {
+    const events = [];
+    const passes = new Map();
+    for (const d of detections) {
+        const key = `${d.acquired}|${d.satellite}`;
+        const p = passes.get(key) || { at: d.acquired, satellite: d.satellite, instrument: d.instrument, count: 0, frp: 0 };
+        p.count++;
+        p.frp += d.frp || 0;
+        passes.set(key, p);
+    }
+    const scored = new Set();
+    for (const p of passes.values()) {
+        const snap = !scored.has(p.at) && snapshots.find((s) => s.pass_time === p.at);
+        if (snap) scored.add(p.at);
+        events.push({
+            at: p.at,
+            kind: 'heat',
+            title: `Satellite heat: ${SATELLITES[p.satellite] || p.satellite}${p.instrument ? ` (${p.instrument})` : ''}`,
+            detail: `${p.count} detection${p.count === 1 ? '' : 's'} · ${p.frp.toFixed(1)} MW`,
+            badge: snap ? `${levelBadge(snap.level)} score ${snap.score}` : '',
+        });
+    }
+    if (t.first_moderate_at) events.push({ at: t.first_moderate_at, kind: 'model', title: 'Signal reached Moderate', detail: 'Using satellite data through this pass' });
+    if (t.first_strong_at) events.push({ at: t.first_strong_at, kind: 'model', title: 'Signal reached Strong', detail: 'Using satellite data through this pass' });
+
+    const collected = detections.map((d) => d.collected_at).sort()[0];
+    if (collected) events.push({ at: collected, kind: 'collector', title: 'Collector first saw this heat' });
+    if (summary.moderate_known_at && summary.moderate_known_at !== collected) {
+        events.push({ at: summary.moderate_known_at, kind: 'collector', title: 'Collector flagged it Moderate' });
+    }
+
+    if (incident) {
+        const where = [incident.name, SOURCES[incident.source] || incident.source, incident.county && `${incident.county} County`].filter(Boolean).join(' · ');
+        if (incident.started) events.push({ at: incident.started, kind: 'official', title: 'Official discovery time', detail: where });
+        if (incident.reported) events.push({ at: incident.reported, kind: 'official', title: 'Official incident record created', detail: where });
+        events.push({
+            at: incident.first_seen,
+            kind: 'collector',
+            title: 'Collector first saw the incident report',
+            detail: incident.preexisting ? 'Already listed when collection began' : '',
+        });
+    }
+    return events.sort((a, b) => a.at.localeCompare(b.at) || KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+}
+
+function timelineHTML(events, t, incident) {
+    if (!events.length) return '<p class="lab-dim">No events yet.</p>';
+    const start = Date.parse(t.first_seen);
+    const leads = [];
+    if (incident?.started) leads.push(['official discovery', incident.started]);
+    if (incident?.reported) leads.push(['the official record', incident.reported]);
+    const headline = leads
+        .map(([label, at]) => {
+            const ms = Date.parse(at) - start;
+            return `${formatSpan(ms)} ${ms >= 0 ? 'before' : 'after'} ${label}`;
+        })
+        .join(' and ');
+    return `
+        ${headline ? `<p class="lab-timeline__headline">First satellite heat came <strong>${headline}</strong>.</p>` : ''}
+        <ol class="lab-timeline">
+            ${events.map((ev) => {
+                const offset = Date.parse(ev.at) - start;
+                return `
+                    <li class="lab-timeline__item lab-timeline__item--${ev.kind}">
+                        <div class="lab-timeline__when">
+                            <span>${shortDate(ev.at)}</span>
+                            <span class="lab-dim">${offset === 0 ? 'start' : `${offset > 0 ? '+' : '−'}${formatSpan(offset)}`}</span>
+                        </div>
+                        <div class="lab-timeline__what">
+                            <div class="lab-timeline__title">${e(ev.title)} ${ev.badge || ''}</div>
+                            ${ev.detail ? `<div class="lab-dim">${e(ev.detail)}</div>` : ''}
+                        </div>
+                    </li>`;
+            }).join('')}
+        </ol>
+        <div class="lab-legend lab-timeline__legend">
+            <span><i class="lab-timeline__key--heat"></i>Satellite</span>
+            <span><i class="lab-timeline__key--model"></i>Model</span>
+            <span><i class="lab-timeline__key--official"></i>Official</span>
+            <span><i class="lab-timeline__key--collector"></i>Our collector</span>
+        </div>`;
+}
+
 function reasonsHTML(snapshot) {
     let reasons = [];
     try {
@@ -247,7 +341,7 @@ async function showDetail(id) {
         panel.innerHTML = `<p class="lab-error">Couldn't load track ${id}: ${e(err.message)}</p>`;
         return;
     }
-    const { track: t, snapshots } = data;
+    const { track: t, incident, snapshots, detections } = data;
     const summary = state.tracks.find((r) => r.id === t.id) || t;
     const latest = snapshots[snapshots.length - 1];
 
@@ -265,11 +359,12 @@ async function showDetail(id) {
             <div><dt>Moderate (pass / seen)</dt><dd>${shortDate(t.first_moderate_at)} / ${shortDate(summary.moderate_known_at)}</dd></div>
             <div><dt>Strong (pass / seen)</dt><dd>${shortDate(t.first_strong_at)} / ${shortDate(summary.strong_known_at)}</dd></div>
             <div><dt>Reported as</dt><dd>${t.incident_name ? `${e(t.incident_name)} <span class="lab-dim">(${e(t.incident_source || '')})</span>` : t.known_at_start ? e(t.known_at_start) : '—'}</dd></div>
-            <div><dt>Agency start time</dt><dd>${shortDate(t.incident_started)}${t.incident_preexisting ? ' <span class="lab-dim">(listed before collection began)</span>' : ''}</dd></div>
-            <div><dt>Lead time (Moderate)</dt><dd>${formatLead(leadHours(t, summary.moderate_known_at))}</dd></div>
+            <div><dt>Official discovery</dt><dd>${shortDate(incident?.started)}${incident?.preexisting ? ' <span class="lab-dim">(listed before collection began)</span>' : ''}</dd></div>
+            <div><dt>Official record created</dt><dd>${shortDate(incident?.reported)}</dd></div>
         </dl>
-        <h3 class="lab-h3">Signal score by satellite pass</h3>
-        ${snapshots.length ? scoreChart(snapshots, t) : '<p class="lab-dim">No snapshots yet.</p>'}
+        <h3 class="lab-h3">Timeline</h3>
+        ${timelineHTML(timelineEvents(t, incident, snapshots, detections, summary), t, incident)}
+        ${snapshots.length > 1 ? `<h3 class="lab-h3">Signal score by satellite pass</h3>${scoreChart(snapshots, t)}` : ''}
         <h3 class="lab-h3">Why, as of the latest pass</h3>
         ${reasonsHTML(latest)}
         <h3 class="lab-h3">Every pass</h3>

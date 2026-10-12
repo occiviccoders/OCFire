@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS incidents (
     lat REAL,
     lng REAL,
     county TEXT,
-    started TEXT,
+    started TEXT,                    -- discovery time the agency lists
+    reported TEXT,                   -- when the official record was created (WFIGS CreatedOnDateTime; null for CAL FIRE)
     first_seen TEXT NOT NULL,        -- when the collector first saw it in the feed
     preexisting INTEGER NOT NULL DEFAULT 0,
     acres REAL,
