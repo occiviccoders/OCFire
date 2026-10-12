@@ -102,7 +102,7 @@ export function mountReplay(container, { track, incident, snapshots, detections,
                 .map((d) => ({
                     type: 'Feature',
                     geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
-                    properties: { age: (now - d.t) / HOUR, frp: d.frp || 1 },
+                    properties: { age: (now - d.t) / HOUR, frp: d.frp || 1, goes: d.instrument === 'ABI' },
                 })),
         };
     }
@@ -144,10 +144,25 @@ export function mountReplay(container, { track, incident, snapshots, detections,
     map.on('load', () => {
         map.addSource('detections', { type: 'geojson', data: detectionData(current) });
         map.addLayer({
+            id: 'detections-goes',
+            type: 'circle',
+            source: 'detections',
+            filter: ['all', ['==', ['get', 'goes'], true], ['<', ['get', 'age'], 1]],
+            paint: {
+                // ~1 km radius: the area a GOES pixel covers.
+                'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 9, 4, 14, 128],
+                'circle-color': '#ffb347',
+                'circle-opacity': 0.12,
+                'circle-stroke-color': '#ffb347',
+                'circle-stroke-width': 1,
+                'circle-stroke-opacity': 0.6,
+            },
+        });
+        map.addLayer({
             id: 'detections-glow',
             type: 'circle',
             source: 'detections',
-            filter: ['<', ['get', 'age'], 0.75],
+            filter: ['all', ['!=', ['get', 'goes'], true], ['<', ['get', 'age'], 0.75]],
             paint: {
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 10, 14, 34],
                 'circle-color': '#ffd166',
@@ -159,6 +174,7 @@ export function mountReplay(container, { track, incident, snapshots, detections,
             id: 'detections',
             type: 'circle',
             source: 'detections',
+            filter: ['!=', ['get', 'goes'], true],
             paint: {
                 // VIIRS pixels are ~375 m across; the radius roughly tracks that at local zooms.
                 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3, 12, 7, 14, 18],

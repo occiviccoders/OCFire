@@ -2,7 +2,7 @@ import { CA_BBOX } from '../config.js';
 import { cached, featureCollection } from '../util.js';
 
 // NASA FIRMS near-real-time satellite thermal detections, last 24h.
-const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT'];
+const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT', 'GOES_NRT'];
 
 export const hotspotsEnabled = __FIRMS_ENABLED__;
 
@@ -29,24 +29,36 @@ function normalizeConfidence(raw) {
 // Ask for two and keep the last 24 hours.
 const WINDOW_MS = 24 * 3600000;
 
+// GOES fire mask codes (FDC): 10/30 processed, 11/31 saturated, 13/33 high probability, 15/35 low.
+function goesConfidence(raw) {
+    const code = Math.round(Number(raw)) % 20;
+    if ([10, 11, 13].includes(code)) return 'high';
+    return code === 15 ? 'low' : 'nominal';
+}
+
+export function parseFirmsRow(r) {
+    const t = r.acq_time.padStart(4, '0');
+    const goes = /^G\d+$/.test(r.satellite);
+    return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [Number(r.longitude), Number(r.latitude)] },
+        properties: {
+            frp: Number(r.frp) || 0,
+            confidence: goes ? goesConfidence(r.confidence) : normalizeConfidence(r.confidence),
+            instrument: goes ? 'ABI' : r.instrument,
+            satellite: goes ? `GOES-${r.satellite.slice(1)}` : r.satellite,
+            daynight: r.daynight,
+            acquired: `${r.acq_date}T${t.slice(0, 2)}:${t.slice(2)}:00Z`,
+            goes,
+        },
+    };
+}
+
 async function fetchSensor(sensor) {
     const res = await fetch(`/api/firms/${sensor}/${CA_BBOX.join(',')}/2`);
     if (!res.ok) throw new Error(`FIRMS ${sensor}: ${res.status}`);
-    return parseCSV(await res.text()).map((r) => {
-        const t = r.acq_time.padStart(4, '0');
-        return {
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [Number(r.longitude), Number(r.latitude)] },
-            properties: {
-                frp: Number(r.frp) || 0,
-                confidence: normalizeConfidence(r.confidence),
-                instrument: r.instrument,
-                satellite: r.satellite,
-                daynight: r.daynight,
-                acquired: `${r.acq_date}T${t.slice(0, 2)}:${t.slice(2)}:00Z`,
-            },
-        };
-    });
+    // GOES_NRT lists each fire twice: detection rows (G18) and fire-power rows (G18FRP). Keep the detections.
+    return parseCSV(await res.text()).filter((r) => !r.satellite.endsWith('FRP')).map(parseFirmsRow);
 }
 
 export const fetchHotspots = cached(loadHotspots, 2 * 60 * 1000);

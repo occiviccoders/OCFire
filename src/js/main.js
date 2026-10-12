@@ -383,6 +383,7 @@ function wireInteractions() {
     const clickTargets = [
         ['heat-ring', (f) => heatPopup(f.properties, camerasNear(f.geometry.coordinates), f.geometry.coordinates)],
         ['hotspots-core', (f) => hotspotPopup(f.properties, hotspotContext(f.geometry.coordinates, f.properties), f.geometry.coordinates)],
+        ['hotspots-goes', (f) => hotspotPopup(f.properties, hotspotContext(f.geometry.coordinates, f.properties), f.geometry.coordinates)],
         ['power-points', (f) => powerPopup(f.properties)],
         ['perimeters-fill', (f) => {
             if (f.properties.incidentId) setSelection(f.properties.incidentId);

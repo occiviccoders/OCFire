@@ -149,6 +149,14 @@
         box-shadow: 0 0 0.6rem #ff5a1f;
     }
 
+    &__dot--goes {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        background: rgba(#ffb347, 0.14);
+        border: 1px solid rgba(#ffb347, 0.55);
+    }
+
     &__dash {
         width: 1.6rem;
         border-top: 2px dashed;

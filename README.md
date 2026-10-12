@@ -222,7 +222,7 @@ cell in the 3×3 neighborhood around each cluster. No database or server job is 
 A separate scheduled Cloudflare Worker that builds a dataset for checking and tuning the score. The map
 itself doesn't depend on it. Every 15 minutes it:
 
-- pulls the last 24 h of VIIRS/MODIS hotspots through the site's own proxies (so it holds no keys) and
+- pulls the last 24 h of VIIRS/MODIS/GOES hotspots through the site's own proxies (so it holds no keys) and
   stores each detection once;
 - groups detections into persistent **tracks** (within 1.25 mi, active until 48 h without heat);
 - saves a frozen **snapshot** per track whenever a new satellite pass arrives: detections, satellites,
@@ -313,7 +313,7 @@ progress is saved in `localStorage`.
 |---|---|---|---|
 | Fire incidents | CAL FIRE | `/api/calfire` | Edge 2 min, client 1 min |
 | Fire perimeters | CAL FIRE FIRIS + NIFC WFIGS (ArcGIS) | `/api/perimeters/{firis,wfigs}` | Edge 2 min, client 2 min |
-| Satellite hotspots | NASA FIRMS (VIIRS ×3 + MODIS) | `/api/firms` (key added server-side) | Edge 5 min, client 2 min; 5-day history client 3 h |
+| Satellite hotspots | NASA FIRMS (VIIRS ×3 + MODIS + GOES-18/19 via `GOES_NRT`) | `/api/firms` (key added server-side) | Edge 5 min, client 2 min; 5-day history client 3 h |
 | Hotspot baseline | Static file built from NASA FIRMS | `/hotspot-baseline.json` | Client 24 h; rebuilt monthly by script |
 | Red Flag Warnings / Watches | NWS | `/api/nws` | Edge 2 min (zone outlines 1 day), client 2 min |
 | Smoke plumes | NOAA HMS | `/api/hms` | Edge 10 min, client 10 min |

@@ -17,7 +17,7 @@ import { distanceMiles } from '../../../src/js/util.js';
 import { CA_BBOX } from '../../../src/js/config.js';
 
 const UA = 'California Fire Watch research collector (info@initialapps.com)';
-const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT'];
+const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT', 'GOES_NRT'];
 const HISTORY_SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_SNPP_NRT'];
 const BBOX = CA_BBOX.join(',');
 const HOUR = 3600000;
@@ -53,20 +53,29 @@ function normalizeConfidence(raw) {
     return n >= 80 ? 'high' : n < 30 ? 'low' : 'nominal';
 }
 
+// GOES fire mask codes (FDC): 10/30 processed, 11/31 saturated, 13/33 high probability, 15/35 low.
+function goesConfidence(raw) {
+    const code = Math.round(Number(raw)) % 20;
+    if ([10, 11, 13].includes(code)) return 'high';
+    return code === 15 ? 'low' : 'nominal';
+}
+
 function parseFirms(text) {
     const [head, ...lines] = text.trim().split('\n');
     if (!head?.startsWith('latitude')) throw new Error(`FIRMS: ${head?.slice(0, 80) || 'empty'}`);
     const cols = head.split(',');
-    return lines.map((line) => {
-        const v = Object.fromEntries(line.split(',').map((x, i) => [cols[i], x]));
+    const rows = lines.map((line) => Object.fromEntries(line.split(',').map((x, i) => [cols[i], x])));
+    // GOES_NRT lists each fire twice: detection rows (G18) and fire-power rows (G18FRP). Keep the detections.
+    return rows.filter((v) => !v.satellite.endsWith('FRP')).map((v) => {
         const t = v.acq_time.padStart(4, '0');
+        const goes = /^G\d+$/.test(v.satellite);
         return {
             lat: Number(v.latitude),
             lng: Number(v.longitude),
             acquired: `${v.acq_date}T${t.slice(0, 2)}:${t.slice(2)}:00.000Z`,
-            satellite: v.satellite,
-            instrument: v.instrument,
-            confidence: normalizeConfidence(v.confidence),
+            satellite: goes ? `GOES-${v.satellite.slice(1)}` : v.satellite,
+            instrument: goes ? 'ABI' : v.instrument,
+            confidence: goes ? goesConfidence(v.confidence) : normalizeConfidence(v.confidence),
             frp: Number(v.frp) || 0,
             bright: Number(v.bright_ti4 || v.brightness) || null,
             daynight: v.daynight,
@@ -346,12 +355,14 @@ async function snapshotTracks(db, trackIds, ctx, nowIso) {
     if (!trackIds.length) return 0;
     const marks = trackIds.map(() => '?').join(',');
     const { results: tracks } = await db.prepare(`SELECT * FROM tracks WHERE id IN (${marks})`).bind(...trackIds).all();
-    const { results: dets } = await db.prepare(`SELECT track_id, lat, lng, acquired, satellite, confidence, frp FROM detections WHERE track_id IN (${marks})`).bind(...trackIds).all();
+    const { results: dets } = await db.prepare(`SELECT track_id, lat, lng, acquired, satellite, instrument, confidence, frp FROM detections WHERE track_id IN (${marks})`).bind(...trackIds).all();
     const byTrack = new Map(tracks.map((t) => [t.id, []]));
-    for (const d of dets) byTrack.get(d.track_id)?.push(d);
+    for (const d of dets) byTrack.get(d.track_id)?.push({ ...d, goes: d.instrument === 'ABI' });
+    // GOES pixels are ~2 km: use the finer satellites for position, extent and drift when there are any.
+    const precise = (ds) => (ds.some((d) => !d.goes) ? ds.filter((d) => !d.goes) : ds);
 
     const centroids = tracks.map((t) => {
-        const ds = byTrack.get(t.id);
+        const ds = precise(byTrack.get(t.id));
         return [ds.reduce((a, d) => a + d.lng, 0) / ds.length, ds.reduce((a, d) => a + d.lat, 0) / ds.length];
     });
     let weather = [];
@@ -365,24 +376,27 @@ async function snapshotTracks(db, trackIds, ctx, nowIso) {
     tracks.forEach((t, i) => {
         const ds = byTrack.get(t.id).sort((a, b) => a.acquired.localeCompare(b.acquired));
         const center = centroids[i];
-        const cluster = ds.map((d) => ({ geometry: { coordinates: [d.lng, d.lat] }, properties: { acquired: d.acquired } }));
+        const cluster = ds.map((d) => ({ geometry: { coordinates: [d.lng, d.lat] }, properties: { acquired: d.acquired, goes: d.goes } }));
+        const fine = ds.filter((d) => !d.goes);
         const info = {
-            count: ds.length,
+            // GOES rescans every 5–10 min, so each GOES satellite counts once (matches findUnmatchedHeat).
+            count: fine.length + new Set(ds.filter((d) => d.goes).map((d) => d.satellite)).size,
             satellites: new Set(ds.map((d) => d.satellite)).size,
             high: ds.filter((d) => d.confidence === 'high').length,
             maxFrp: Math.max(...ds.map((d) => d.frp || 0)),
         };
         const sumFrp = ds.reduce((a, d) => a + (d.frp || 0), 0);
+        const pos = precise(ds);
         let extent = 0;
-        for (let a = 0; a < Math.min(ds.length, 300); a++) {
-            for (let b = a + 1; b < Math.min(ds.length, 300); b++) extent = Math.max(extent, distanceMiles([ds[a].lng, ds[a].lat], [ds[b].lng, ds[b].lat]));
+        for (let a = 0; a < Math.min(pos.length, 300); a++) {
+            for (let b = a + 1; b < Math.min(pos.length, 300); b++) extent = Math.max(extent, distanceMiles([pos[a].lng, pos[a].lat], [pos[b].lng, pos[b].lat]));
         }
-        const firstMs = Date.parse(ds[0].acquired);
-        const later = ds.filter((d) => Date.parse(d.acquired) - firstMs > 30 * 60000);
+        const firstMs = fine.length ? Date.parse(fine[0].acquired) : 0;
+        const later = fine.filter((d) => Date.parse(d.acquired) - firstMs > 30 * 60000);
         let drift = null;
         let driftBearing = null;
         if (later.length) {
-            const start = [ds[0].lng, ds[0].lat];
+            const start = [fine[0].lng, fine[0].lat];
             const end = [later.reduce((a, d) => a + d.lng, 0) / later.length, later.reduce((a, d) => a + d.lat, 0) / later.length];
             drift = distanceMiles(start, end);
             driftBearing = bearing(start, end);

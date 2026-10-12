@@ -20,7 +20,7 @@ export const LAYER_GROUPS = {
         'perimeters-fill', 'perimeters-tint', 'perimeters-hatch', 'perimeter-history-line', 'perimeters-glow',
         'perimeters-active-edge', 'perimeters-line', 'perimeters-selected', 'perimeters-label',
     ],
-    hotspots: ['hotspots-glow', 'hotspots-core', 'heat-pulse', 'heat-ring'],
+    hotspots: ['hotspots-goes', 'hotspots-glow', 'hotspots-core', 'heat-pulse', 'heat-ring'],
     fireWeather: ['fireweather-fill', 'fireweather-line'],
     smoke: ['smoke-fill', 'smoke-line'],
     fhsz: ['fhsz-fill', 'fhsz-line'],
@@ -157,10 +157,26 @@ export function addFireLayers(map) {
         'perimeters-glow',
     );
 
+    // GOES pixels are ~2 km across: a soft wide disc, so it doesn't read as a precise point.
+    map.addLayer({
+        id: 'hotspots-goes',
+        type: 'circle',
+        source: 'hotspots',
+        filter: ['==', ['get', 'goes'], true],
+        paint: {
+            'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 2.5, 10, 8, 14, 128],
+            'circle-color': '#ffb347',
+            'circle-opacity': 0.14,
+            'circle-stroke-color': '#ffb347',
+            'circle-stroke-width': 1,
+            'circle-stroke-opacity': 0.55,
+        },
+    });
     map.addLayer({
         id: 'hotspots-glow',
         type: 'circle',
         source: 'hotspots',
+        filter: ['!=', ['get', 'goes'], true],
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4, 12, 16],
             'circle-color': '#ff5a1f',
@@ -172,6 +188,7 @@ export function addFireLayers(map) {
         id: 'hotspots-core',
         type: 'circle',
         source: 'hotspots',
+        filter: ['!=', ['get', 'goes'], true],
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2, 12, 4.5],
             'circle-color': ['interpolate', ['linear'], ['get', 'frp'], 0, '#ffe08a', 10, '#ff9a3c', 50, '#ff2a1a'],

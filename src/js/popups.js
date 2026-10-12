@@ -124,6 +124,7 @@ export function hotspotPopup(p, context, coords) {
                 <div><dt>Pass</dt><dd>${p.daynight === 'D' ? 'Day' : 'Night'}</dd></div>
             </dl>
             ${context ? hotspotContextHTML(context) : ''}
+            ${p.goes ? '<p class="popup__meta">GOES watches California every 5–10 minutes, but each pixel is about 2 km across, so the fire is somewhere in the circle.</p>' : ''}
             <p class="popup__meta">Detected ${timeAgo(p.acquired)} (${e(formatDateTime(p.acquired))})${coords ? ` · <a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">track history</a> · ${goesLink(coords)}` : ''}</p>
         </div>`;
 }

@@ -44,7 +44,7 @@ function bearing([lng1, lat1], [lng2, lat2]) {
 }
 
 // Bump whenever assess() changes, so stored research snapshots record which rules produced them.
-export const RULES_VERSION = 1;
+export const RULES_VERSION = 2;
 
 // How strong the fire signal is for a cluster: a points tally with the reasons shown to the user.
 // It's a ranking aid, not a calibrated probability of fire. Also used by workers/collector.
@@ -79,9 +79,9 @@ export function assess(cluster, info, { past, priorDays, wind, redFlag }) {
     else if (wind?.level === 'elevated') add(1, 'watch', `Elevated fire weather here: gusts ${Math.round(wind.gust)} mph, humidity ${Math.round(wind.rh)}%`);
     else if (wind && !redFlag) add(0, 'calm', `No fire-weather concern here right now (gusts ${Math.round(wind.gust)} mph, humidity ${Math.round(wind.rh)}%)`);
 
-    // Across satellite passes, did the heat move the way the wind blows?
-    const sorted = [...cluster].sort((a, b) => Date.parse(a.properties.acquired) - Date.parse(b.properties.acquired));
-    const firstTime = Date.parse(sorted[0].properties.acquired);
+    // Across satellite passes, did the heat move the way the wind blows? GOES pixels (~2 km) are too coarse for this.
+    const sorted = cluster.filter((f) => !f.properties.goes).sort((a, b) => Date.parse(a.properties.acquired) - Date.parse(b.properties.acquired));
+    const firstTime = sorted.length ? Date.parse(sorted[0].properties.acquired) : 0;
     const later = sorted.filter((f) => Date.parse(f.properties.acquired) - firstTime > 30 * 60000);
     if (wind && later.length) {
         const start = sorted[0].geometry.coordinates;
@@ -126,9 +126,12 @@ export function findUnmatchedHeat(hotspots, incidents, perimeters, { history = [
 
     return featureCollection(
         clusters.map((cl) => {
-            const n = cl.length;
-            const lng = cl.reduce((a, f) => a + f.geometry.coordinates[0], 0) / n;
-            const lat = cl.reduce((a, f) => a + f.geometry.coordinates[1], 0) / n;
+            // GOES rescans every 5–10 min, so each GOES satellite counts once; its coarse pixels don't move the center.
+            const precise = cl.filter((f) => !f.properties.goes);
+            const n = precise.length + new Set(cl.filter((f) => f.properties.goes).map((f) => f.properties.satellite)).size;
+            const located = precise.length ? precise : cl;
+            const lng = located.reduce((a, f) => a + f.geometry.coordinates[0], 0) / located.length;
+            const lat = located.reduce((a, f) => a + f.geometry.coordinates[1], 0) / located.length;
             const times = cl.map((f) => Date.parse(f.properties.acquired));
             const satellites = new Set(cl.map((f) => f.properties.satellite));
             const high = cl.filter((f) => f.properties.confidence === 'high').length;
