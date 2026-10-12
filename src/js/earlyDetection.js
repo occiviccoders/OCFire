@@ -4,13 +4,13 @@ import { historyAt } from './sources/baseline.js';
 import { compass } from './wind/fireWeather.js';
 
 const RECENT_HOURS = 12;
-const CLUSTER_MI = 1.25;
+export const CLUSTER_MI = 1.25;
 // Heat this close to a known fire is assumed to be that fire.
-const INCIDENT_MI = 5;
+export const INCIDENT_MI = 5;
 const PERIMETER_PAD_DEG = 0.03;
 // Hot on this many of the previous five days at the same spot = a fixed heat source, not a new fire.
 // Refinery flares are intermittent, so two days is enough.
-const PERSISTENT_DAYS = 2;
+export const PERSISTENT_DAYS = 2;
 const PERSISTENT_MI = 0.6;
 
 // A padded bounding box rather than the exact outline: detections ring the edge of a growing fire.
@@ -26,7 +26,7 @@ const RECURRING_DAYS = 15;
 const STRONG_FRP_MW = 20;
 const DRIFT_MI = 0.3;
 
-function daysSeenBefore(coords, history) {
+export function daysSeenBefore(coords, history) {
     const days = new Set();
     for (const h of history) if (distanceMiles(h.coords, coords) < PERSISTENT_MI) days.add(h.day);
     return days.size;
@@ -43,9 +43,13 @@ function bearing([lng1, lat1], [lng2, lat2]) {
     return ((Math.atan2(y, x) / rad) + 360) % 360;
 }
 
-// How unusual a cluster is for its location and conditions: a points tally with the reasons shown to the user.
-// It's a ranking aid, not a calibrated probability of fire.
-function assess(cluster, info, { past, priorDays, wind, redFlag }) {
+// Bump whenever assess() changes, so stored research snapshots record which rules produced them.
+export const RULES_VERSION = 1;
+
+// How strong the fire signal is for a cluster: a points tally with the reasons shown to the user.
+// It's a ranking aid, not a calibrated probability of fire. Also used by workers/collector.
+// cluster: detection features with properties.acquired; info: { count, satellites, high, maxFrp }.
+export function assess(cluster, info, { past, priorDays, wind, redFlag }) {
     const reasons = [];
     let score = 0;
     const add = (points, tone, text) => {

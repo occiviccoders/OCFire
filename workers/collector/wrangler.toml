@@ -1,0 +1,18 @@
+name = "ocfire-collector"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Every 15 minutes, whether or not anyone is on the site.
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+SITE = "https://ocfire.pages.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ocfire-research"
+database_id = "4e125d0a-9e10-4343-89db-300f8f44fa26"
+
+[observability]
+enabled = true

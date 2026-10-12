@@ -141,6 +141,7 @@ functions/api/              Cloudflare Pages Functions (production proxies), one
 server/proxy.js             Shared proxy: GET only, edge cache, User-Agent, error handling
 scripts/build-baseline.mjs  Rebuilds public/hotspot-baseline.json (one year of satellite heat per ~1 km cell)
 public/                     Static files copied as-is into the build (the hotspot baseline)
+workers/collector/          Scheduled Worker + D1 schema that logs hotspot tracks for model research
 src/js/
   main.js                   Orchestrator: state, refresh loops, map setup, click handling
   config.js                 Map defaults, bounding boxes, wind grid, forecast corridors
@@ -211,6 +212,33 @@ exists and near-real-time data for recent months, about 150 requests and under a
 
 The browser loads it once a day (about 50 KB compressed), and `sources/baseline.js` looks up the busiest
 cell in the 3×3 neighborhood around each cluster. No database or server job is involved.
+
+#### Research collector (`workers/collector/`)
+
+A separate scheduled Cloudflare Worker that builds a dataset for checking and tuning the score. The map
+itself doesn't depend on it. Every 15 minutes it:
+
+- pulls the last 24 h of VIIRS/MODIS hotspots through the site's own proxies (so it holds no keys) and
+  stores each detection once;
+- groups detections into persistent **tracks** (within 1.25 mi, active until 48 h without heat);
+- saves a frozen **snapshot** per track whenever a new satellite pass arrives: detections, satellites,
+  FRP, spread and drift, wind/gust/humidity at that spot, fire-weather level, Red Flag, HMS smoke, CHP
+  fire calls nearby, baseline history, and the score/level/reasons from the same `assess()` the map uses
+  (with `rules_version`), so later scoring changes never rewrite what the model said at the time;
+- records when each track first reached Moderate and Strong;
+- labels outcomes from CAL FIRE and NIFC WFIGS incidents: `fire` if one starts within 3 mi between 24 h
+  before and 72 h after first detection (with whether it predates the track), `known_fire` if the track
+  started on an existing fire, otherwise `not_reported` or `recurring` after 72 h quiet.
+
+Data lives in the D1 database `ocfire-research`. `GET https://ocfire-collector.initial-apps.workers.dev/`
+returns counts and the last few runs.
+
+```bash
+cd workers/collector
+npx wrangler d1 execute ocfire-research --remote --file schema.sql   # once
+npx wrangler dev --test-scheduled    # then curl localhost:8787/__scheduled
+npx wrangler deploy
+```
 
 ### Wind and fire weather (`wind/`, `sources/weather.js`)
 
