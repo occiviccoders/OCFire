@@ -121,7 +121,7 @@ function selectIncident(id, { fly = true } = {}) {
 function incidentCardHTML(feature) {
     const { forecast, hour } = state.wind;
     const outlook = forecast ? fireWindOutlook(forecast, hour, feature.geometry.coordinates) : null;
-    return incidentPopup(feature.properties, outlook, camerasNear(feature.geometry.coordinates));
+    return incidentPopup(feature.properties, outlook, camerasNear(feature.geometry.coordinates), feature.geometry.coordinates);
 }
 
 function selectHeat(id) {
