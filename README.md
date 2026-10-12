@@ -240,8 +240,10 @@ Data lives in the D1 database `ocfire-research`. The Worker also serves a small 
 A separate research page at [/lab](https://ocfire.pages.dev/lab), linked quietly from the sidebar footer
 and not indexed. It shows collector health, a scorecard (hit rate and median lead time for tracks that
 reached Moderate or Strong, plus misses), new hotspots per day by peak signal, a filterable track table
-with CSV download, and a per-track timeline (score by satellite pass against the agency's start time,
-reasons, and every snapshot's conditions). `/lab?track=<id>` links straight to one track. For local work,
+with CSV download, and a per-track view: a replay map (`labReplay.js`, loaded on demand) with a time
+slider that plays back detections, wind and the reported incident; an event timeline (satellite passes,
+score changes, official discovery and record-created times, and when the collector saw each); reasons;
+and every snapshot's conditions. `/lab?track=<id>` links straight to one track. For local work,
 run the collector with `npx wrangler dev` and start Vite with `VITE_LAB_API=http://localhost:8787`.
 
 ```bash

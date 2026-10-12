@@ -518,6 +518,163 @@ $timeline-colors: (
     }
 }
 
+.lab-replay-wrap {
+    margin-bottom: 1.6rem;
+}
+
+.lab-replay {
+    position: relative;
+    height: 36rem;
+    border-radius: 0.6rem;
+    overflow: hidden;
+    border: 1px solid $border;
+
+    @media (max-width: 480px) {
+        height: 28rem;
+    }
+
+    &__map {
+        width: 100%;
+        height: 100%;
+    }
+
+    &__panel,
+    &__clock {
+        position: absolute;
+        left: 1rem;
+        z-index: 1;
+        background: rgba($bg, 0.82);
+        border: 1px solid $border;
+        border-radius: 0.6rem;
+        padding: 0.8rem 1rem;
+        font-size: 1.25rem;
+        pointer-events: none;
+        backdrop-filter: blur(4px);
+    }
+
+    &__panel {
+        top: 1rem;
+        display: grid;
+        gap: 0.3rem;
+        min-width: 18rem;
+    }
+
+    &__clock {
+        bottom: 1rem;
+        font-weight: 600;
+
+        span {
+            font-weight: 400;
+            color: $text-dim;
+            margin-left: 0.6rem;
+        }
+    }
+
+    &__wind {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+
+    &__arrow {
+        display: inline-block;
+        font-size: 1.6rem;
+        line-height: 1;
+        color: #7ec8ff;
+    }
+
+    &__incident {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none;
+    }
+
+    &__incident-label {
+        order: -1;
+        font-size: 1.15rem;
+        font-weight: 600;
+        background: $fire-hot;
+        color: #fff;
+        border-radius: 0.4rem;
+        padding: 0.1rem 0.6rem;
+        margin-bottom: 0.3rem;
+        white-space: nowrap;
+    }
+
+    &__incident-pin {
+        width: 1.4rem;
+        height: 1.4rem;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        background: $fire-hot;
+        border: 2px solid #fff;
+    }
+
+    &__controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    &__play {
+        width: 4rem;
+        flex: none;
+    }
+
+    &__track {
+        position: relative;
+        flex: 1;
+        padding-top: 1rem;
+
+        input {
+            width: 100%;
+            accent-color: $fire-warm;
+        }
+    }
+
+    &__marks {
+        position: absolute;
+        top: 0;
+        left: 0.8rem;
+        right: 0.8rem;
+        height: 0.8rem;
+    }
+
+    &__mark {
+        position: absolute;
+        top: 0;
+        width: 0.3rem;
+        height: 0.8rem;
+        border-radius: 0.2rem;
+        transform: translateX(-50%);
+        background: $fire-out;
+    }
+
+    &__caption {
+        font-size: 1.3rem;
+        margin-top: 0.4rem;
+        min-height: 2rem;
+    }
+
+    &__dot {
+        display: inline-block;
+        width: 0.8rem;
+        height: 0.8rem;
+        border-radius: 50%;
+        margin-right: 0.6rem;
+        background: $fire-out;
+    }
+
+    @each $kind, $color in $timeline-colors {
+        &__mark--#{$kind},
+        &__dot--#{$kind} {
+            background: $color;
+        }
+    }
+}
+
 .lab-reasons {
     list-style: none;
     font-size: 1.3rem;

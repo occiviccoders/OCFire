@@ -16,7 +16,7 @@ const RESOLVED = new Set(['fire', 'not_reported', 'recurring']);
 const HOUR = 3600 * 1000;
 
 const $ = (sel) => document.querySelector(sel);
-const state = { tracks: [], status: null };
+const state = { tracks: [], status: null, unmountReplay: null };
 
 const getJSON = async (path) => {
     const res = await fetch(`${API}${path}`);
@@ -344,6 +344,9 @@ async function showDetail(id) {
     const { track: t, incident, snapshots, detections } = data;
     const summary = state.tracks.find((r) => r.id === t.id) || t;
     const latest = snapshots[snapshots.length - 1];
+    const events = timelineEvents(t, incident, snapshots, detections, summary);
+    state.unmountReplay?.();
+    state.unmountReplay = null;
 
     panel.innerHTML = `
         <div class="lab-card__head">
@@ -363,7 +366,8 @@ async function showDetail(id) {
             <div><dt>Official record created</dt><dd>${shortDate(incident?.reported)}</dd></div>
         </dl>
         <h3 class="lab-h3">Timeline</h3>
-        ${timelineHTML(timelineEvents(t, incident, snapshots, detections, summary), t, incident)}
+        ${detections.length ? '<div class="lab-replay-wrap" data-replay><p class="lab-dim">Loading map…</p></div>' : ''}
+        ${timelineHTML(events, t, incident)}
         ${snapshots.length > 1 ? `<h3 class="lab-h3">Signal score by satellite pass</h3>${scoreChart(snapshots, t)}` : ''}
         <h3 class="lab-h3">Why, as of the latest pass</h3>
         ${reasonsHTML(latest)}
@@ -393,6 +397,12 @@ async function showDetail(id) {
             </table>
         </div>`;
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const replay = panel.querySelector('[data-replay]');
+    if (replay) {
+        const { mountReplay } = await import('./labReplay.js');
+        if (panel.contains(replay)) state.unmountReplay = mountReplay(replay, { track: t, incident, snapshots, detections, events });
+    }
 }
 
 function downloadCSV() {
@@ -429,6 +439,8 @@ async function init() {
     });
     $('#detail').addEventListener('click', (ev) => {
         if (!ev.target.closest('[data-close]')) return;
+        state.unmountReplay?.();
+        state.unmountReplay = null;
         $('#detail').hidden = true;
         document.querySelectorAll('#tracks tr.is-selected').forEach((tr) => tr.classList.remove('is-selected'));
     });
