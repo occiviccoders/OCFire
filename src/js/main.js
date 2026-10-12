@@ -42,7 +42,6 @@ const state = {
     hotspotCount: null,
     fireWeather: EMPTY_FC,
     overlays: { smoke: false, fhsz: false, power: false },
-    scope: 'near',
     selectedId: null,
     wind: { forecast: null, series: {}, air: {}, ocPoint: 'central', hour: 0, flow: true, arrows: false, hdw: false },
 };
@@ -148,11 +147,11 @@ function setSelection(id) {
 }
 
 function renderList() {
-    renderIncidentList(state.incidents, state.scope, state.selectedId, (id) => selectIncident(id), state.unmatchedHeat, selectHeat);
+    renderIncidentList(state.incidents, state.selectedId, (id) => selectIncident(id), state.unmatchedHeat, selectHeat);
 }
 
 function renderAll() {
-    renderStats(state.incidents, state.scope, state.hotspotCount);
+    renderStats(state.incidents, state.hotspotCount);
     renderList();
 }
 
@@ -424,14 +423,6 @@ function wireControls() {
         if (hour != null) timeline.setHour(hour);
     });
     document.getElementById('toggle-satellite').addEventListener('change', (ev) => setSatellite(map, ev.target.checked));
-
-    document.querySelectorAll('#scope button').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            state.scope = btn.dataset.scope;
-            document.querySelectorAll('#scope button').forEach((b) => b.classList.toggle('is-active', b === btn));
-            renderAll();
-        });
-    });
 
     document.getElementById('refresh').addEventListener('click', refresh);
     document.getElementById('recenter').addEventListener('click', () => map.flyTo({ center: OC_CENTER, zoom: INITIAL_ZOOM, duration: 1000 }));

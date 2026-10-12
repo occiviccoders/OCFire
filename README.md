@@ -419,7 +419,7 @@ The app only needs **some server that answers the same `/api/*` paths**. The six
 ### Forking it for another area
 
 Most regional settings are in `src/js/config.js`: the map's starting view (`OC_CENTER`, `INITIAL_ZOOM`),
-the hotspot bounding box (`CA_BBOX`), the "Near" list radius (`NEARBY_RADIUS_MI`), the wind grid and state outline mask, and `FORECAST_POINTS` (the
+the hotspot bounding box (`CA_BBOX`), the wind grid and state outline mask, and `FORECAST_POINTS` (the
 corridors in the forecast panel). California-only sources (CAL FIRE, FIRIS, CHP, SCE, Cal OES, FHSZ,
 ALERTCalifornia) would need equivalents for another state. FIRMS, NWS, NIFC WFIGS, NOAA HMS, Open-Meteo,
 Valhalla, and Photon all cover the whole US.

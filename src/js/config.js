@@ -4,7 +4,6 @@ export const INITIAL_ZOOM = 7;
 // [west, south, east, north]
 export const CA_BBOX = [-124.5, 32.4, -114.1, 42.1];
 
-export const NEARBY_RADIUS_MI = 150;
 export const REFRESH_MS = 5 * 60 * 1000;
 
 // Statewide wind forecast grid. Only points inside WIND_MASK are fetched (~500); each counts as one

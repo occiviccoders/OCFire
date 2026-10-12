@@ -1,15 +1,9 @@
-import { NEARBY_RADIUS_MI } from './config.js';
 import { escapeHTML as e, formatAcres, formatMiles, formatPercent, timeAgo } from './util.js';
 
 const $ = (sel) => document.querySelector(sel);
 
-export function incidentsInScope(incidents, scope) {
-    const all = incidents.features.map((f) => f.properties);
-    return scope === 'near' ? all.filter((p) => p.distance <= NEARBY_RADIUS_MI) : all;
-}
-
-export function renderStats(incidents, scope, hotspotCount) {
-    const list = incidentsInScope(incidents, scope);
+export function renderStats(incidents, hotspotCount) {
+    const list = incidents.features.map((f) => f.properties);
     const acres = list.reduce((sum, p) => sum + (p.acres || 0), 0);
     const nearest = incidents.features[0]?.properties;
 
@@ -64,11 +58,11 @@ function heatItem(p) {
 }
 
 // `heat`: unmatched satellite heat clusters (see earlyDetection.js), listed after the incidents.
-export function renderIncidentList(incidents, scope, selectedId, onSelect, heat = null, onSelectHeat = () => {}) {
-    const list = incidentsInScope(incidents, scope);
+export function renderIncidentList(incidents, selectedId, onSelect, heat = null, onSelectHeat = () => {}) {
+    const list = incidents.features.map((f) => f.properties);
     const heatList = (heat?.features || [])
         .map((f) => f.properties)
-        .filter((p) => p.strength !== 'persistent' && (scope !== 'near' || p.distance <= NEARBY_RADIUS_MI));
+        .filter((p) => p.strength !== 'persistent');
     const ul = $('#incident-list');
     if (!ul.dataset.fadeWired) {
         ul.dataset.fadeWired = '1';
@@ -78,7 +72,7 @@ export function renderIncidentList(incidents, scope, selectedId, onSelect, heat 
 
     const incidentsHTML = list.length
         ? list.map((p) => incidentItem(p, selectedId)).join('')
-        : `<li class="incident-list__empty">${scope === 'near' ? `No active incidents within ${NEARBY_RADIUS_MI} miles of OC.` : 'No active incidents in California.'}</li>`;
+        : `<li class="incident-list__empty">No active incidents in California.</li>`;
     const heatHTML = heatList.length
         ? `<li class="incident-list__group" title="Satellite heat with no CAL FIRE incident or perimeter within 5 miles">Unconfirmed satellite heat</li>${heatList.map(heatItem).join('')}`
         : '';
