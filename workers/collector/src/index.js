@@ -249,10 +249,19 @@ async function batch(db, statements, size = 50) {
     return results;
 }
 
-// Upserts the latest incident state and logs a history row whenever size, containment or active status changes.
+// Upserts new or changed incidents and logs a history row whenever size, containment or active status changes.
+// Unchanged incidents are skipped: rewriting all ~1,000 every 15 minutes would blow through D1's free
+// 100k rows-written per day.
+const INCIDENT_FIELDS = ['name', 'lat', 'lng', 'started', 'reported', 'acres', 'updated', 'contained', 'active', 'contained_at', 'controlled_at', 'out_at', 'url', 'cause'];
+
 async function upsertIncidents(db, incidents, nowIso, firstRunAt) {
-    const { results: known } = await db.prepare('SELECT id, acres, contained, active FROM incidents').all();
+    const { results: known } = await db.prepare(`SELECT id, ${INCIDENT_FIELDS.join(', ')} FROM incidents`).all();
     const previous = new Map(known.map((r) => [r.id, r]));
+    incidents = incidents.filter((i) => {
+        const before = previous.get(i.id);
+        return !before || INCIDENT_FIELDS.some((k) => (before[k] ?? null) !== (i[k] ?? null));
+    });
+    if (!incidents.length) return 0;
     const sql = db.prepare(`
         INSERT INTO incidents (id, source, name, lat, lng, county, started, reported, first_seen, preexisting, acres, updated,
             contained, active, contained_at, controlled_at, out_at, url, cause)
@@ -272,6 +281,7 @@ async function upsertIncidents(db, incidents, nowIso, firstRunAt) {
         }
     }
     await batch(db, statements);
+    return incidents.length;
 }
 
 async function insertDetections(db, detections, nowIso) {
@@ -473,13 +483,13 @@ async function collect(env) {
     ]);
     const incidents = [...calfire, ...wfigs];
 
-    await upsertIncidents(db, incidents, nowIso, firstRunAt);
+    const incidentsWritten = await upsertIncidents(db, incidents, nowIso, firstRunAt);
     const fresh = await insertDetections(db, hotspots, nowIso);
     const { touched, created } = await assignTracks(db, fresh, incidents, now, nowIso);
     const snapshots = await snapshotTracks(db, touched, { baseline, history, redFlags, smoke, chp, errors }, nowIso);
     const labeled = await labelTracks(db, now, nowIso);
 
-    const summary = { new_detections: fresh.length, new_tracks: created, snapshots, labeled, errors: errors.length ? errors.join('; ') : null };
+    const summary = { new_detections: fresh.length, new_tracks: created, snapshots, labeled, incidents_written: incidentsWritten, errors: errors.length ? errors.join('; ') : null };
     await db.prepare('UPDATE runs SET finished_at = ?, new_detections = ?, new_tracks = ?, snapshots = ?, labeled = ?, errors = ? WHERE id = ?')
         .bind(iso(Date.now()), summary.new_detections, summary.new_tracks, summary.snapshots, summary.labeled, summary.errors, run.id).run();
     return summary;
