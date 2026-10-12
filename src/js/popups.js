@@ -42,17 +42,7 @@ function camerasHTML(cameras) {
         </div>`;
 }
 
-// NASA FIRMS (advanced mode) with the GOES-18/19 layers on; GOES rescans every ~5–10 min.
-function goesHref([lng, lat]) {
-    const layers = 'fires_goes_all,fires_goes_g18,fires_goes_g19,fires_viirs_noaa20,fires_viirs_noaa21,fires_viirs_snpp,fires_modis_aqua,fires_modis_terra,street';
-    return `https://firms.modaps.eosdis.nasa.gov/map/#m:advanced;d:24hrs;l:${layers};@${lng.toFixed(3)},${lat.toFixed(3)},11z`;
-}
-
-function goesLink(coords) {
-    return coords ? `<a href="${goesHref(coords)}" target="_blank" rel="noopener">GOES live view (NASA)</a>` : '';
-}
-
-export function incidentPopup(p, windOutlook = null, cameras, coords) {
+export function incidentPopup(p, windOutlook = null, cameras) {
     const [sizeLine, stageLine, timeLine] = summarize(p);
     const stage = containmentStage(p.contained);
     return `
@@ -78,7 +68,7 @@ export function incidentPopup(p, windOutlook = null, cameras, coords) {
                 or hand line, or a natural barrier — that they expect to hold. It isn’t how much has been put out:
                 a fully contained fire can keep burning inside its lines.
             </details>
-            <p class="popup__meta">${e(timeLine)}${p.adminUnit ? `<br>${e(p.adminUnit)}` : ''}${coords ? `<br>${goesLink(coords)}` : ''}</p>
+            <p class="popup__meta">${e(timeLine)}${p.adminUnit ? `<br>${e(p.adminUnit)}` : ''}</p>
             ${p.url ? `<a class="popup__link" href="${e(p.url)}" target="_blank" rel="noopener">CAL FIRE incident page →</a>` : ''}
         </div>`;
 }
@@ -125,7 +115,7 @@ export function hotspotPopup(p, context, coords) {
             </dl>
             ${context ? hotspotContextHTML(context) : ''}
             ${p.goes ? '<p class="popup__meta">GOES watches California every 5–10 minutes, but each pixel is about 2 km across, so the fire is somewhere in the circle.</p>' : ''}
-            <p class="popup__meta">Detected ${timeAgo(p.acquired)} (${e(formatDateTime(p.acquired))})${coords ? ` · <a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">track history</a> · ${goesLink(coords)}` : ''}</p>
+            <p class="popup__meta">Detected ${timeAgo(p.acquired)} (${e(formatDateTime(p.acquired))})${coords ? ` · <a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">track history</a>` : ''}</p>
         </div>`;
 }
 
@@ -174,9 +164,7 @@ function detectionRecordHTML(p, coords) {
             <div><dt>First pass</dt><dd>${e(formatDateTime(p.first))}</dd></div>
             <div><dt>Latest pass</dt><dd>${e(formatDateTime(p.latest))}</dd></div>
             ${where ? `<div><dt>Location</dt><dd>${where} <button class="link-btn popup__copy" data-copy="${where}">Copy</button></dd></div>` : ''}
-            ${where ? `<div><dt>History</dt><dd><a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">Track timeline in the Model lab</a></dd></div>` : ''}
-            ${where ? `<div><dt>Live</dt><dd>${goesLink(coords)}</dd></div>` : ''}
-        </dl>`;
+            ${where ? `<div><dt>History</dt><dd><a href="/lab?near=${coords[1].toFixed(4)},${coords[0].toFixed(4)}">Track timeline in the Model lab</a></dd></div>` : ''}        </dl>`;
 }
 
 export function heatPopup(p, cameras, coords) {
