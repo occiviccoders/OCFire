@@ -182,7 +182,8 @@ src/sass/                   Styles (abstracts + one partial per UI area)
 4. Rate each cluster: **likely** if it has at least two of three signals (3+ detections, seen by more
    than one satellite, any high-confidence detection), otherwise **possible**; or **persistent** if the
    spot was hot on ≥ 2 of the previous 5 days within 0.6 mi, which catches refinery flares and power plants. Persistent heat is drawn gray and left out of the list.
-5. Score how much each cluster **stands out** (`assess()`), as a points tally with every reason shown on the card:
+5. Score each cluster's **fire signal** (`assess()`), as a points tally. The card lists what points toward a
+   fire and what points against (one detection, one satellite, calm weather), so a Weak rating explains itself:
 
    | Signal | Points |
    |---|---|
@@ -194,7 +195,7 @@ src/sass/                   Styles (abstracts + one partial per UI area)
    | Inside a Red Flag Warning · elevated or red-flag-level weather at the spot | +1 each |
    | Later satellite passes sit downwind of the first (≥ 0.3 mi, within 45° of the wind) | +2 |
 
-   5+ is **High**, 3–4 **Moderate**, otherwise **Low**. It's a ranking aid, not a calibrated probability:
+   5+ is **Strong**, 3–4 **Moderate**, otherwise **Weak**. It's a ranking aid, not a calibrated probability:
    there's no labeled history behind the weights yet, so the app never shows a percentage.
 
 These can still be agricultural or prescribed burns. They're leads, not confirmed fires.

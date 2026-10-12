@@ -56,7 +56,7 @@ function heatItem(p) {
                 </div>
                 <div class="incident__nums">
                     <span>${p.count} satellite detection${p.count === 1 ? '' : 's'}</span>
-                    ${p.unusual === 'high' || p.unusual === 'moderate' ? `<span class="incident__unusual incident__unusual--${p.unusual}">${p.unusual === 'high' ? 'Stands out' : 'Notable'}</span>` : ''}
+                    ${p.unusual === 'high' || p.unusual === 'moderate' ? `<span class="incident__unusual incident__unusual--${p.unusual}">${p.unusual === 'high' ? 'Strong signal' : 'Moderate signal'}</span>` : ''}
                     <span class="incident__updated">${timeAgo(p.latest)}</span>
                 </div>
             </button>

@@ -64,13 +64,16 @@ function assess(cluster, info, { past, priorDays, wind, redFlag }) {
     if (priorDays >= PERSISTENT_DAYS) add(-2, 'calm', `Hot on ${priorDays} of the previous 5 days`);
 
     if (info.count >= 3) add(1, 'watch', `${info.count} detections`);
+    else if (info.count === 1) add(0, 'calm', 'Only one detection so far');
     if (info.satellites > 1) add(1, 'watch', `Seen by ${info.satellites} satellites`);
+    else if (info.count > 1) add(0, 'calm', 'Seen by only one satellite');
     if (info.high) add(1, 'watch', 'High-confidence detection');
     if (info.maxFrp >= STRONG_FRP_MW) add(1, 'watch', `Strong heat output: ${Math.round(info.maxFrp)} MW`);
 
     if (redFlag) add(1, 'alert', 'Inside a Red Flag Warning');
     if (wind?.level === 'critical') add(1, 'alert', `Red-flag-level weather here: gusts ${Math.round(wind.gust)} mph, humidity ${Math.round(wind.rh)}%`);
     else if (wind?.level === 'elevated') add(1, 'watch', `Elevated fire weather here: gusts ${Math.round(wind.gust)} mph, humidity ${Math.round(wind.rh)}%`);
+    else if (wind && !redFlag) add(0, 'calm', `No fire-weather concern here right now (gusts ${Math.round(wind.gust)} mph, humidity ${Math.round(wind.rh)}%)`);
 
     // Across satellite passes, did the heat move the way the wind blows?
     const sorted = [...cluster].sort((a, b) => Date.parse(a.properties.acquired) - Date.parse(b.properties.acquired));

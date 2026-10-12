@@ -551,7 +551,20 @@
 
     &__unusual-head {
         font-size: 1.25rem;
-        margin-bottom: 0.4rem;
+    }
+
+    &__unusual-summary {
+        font-size: 1.15rem;
+        line-height: 1.35;
+        margin: 0.2rem 0 0.5rem;
+    }
+
+    &__reasons-title {
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: $text-dim;
+        margin: 0.4rem 0 0.2rem;
     }
 
     &__reasons {

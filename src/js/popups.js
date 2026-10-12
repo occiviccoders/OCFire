@@ -113,16 +113,30 @@ export function fireWeatherPopup(p) {
         </div>`;
 }
 
-const UNUSUAL_LABEL = { high: 'High', moderate: 'Moderate', low: 'Low' };
+const SIGNAL = {
+    high: ['Strong', 'Several signs point to a real, active fire.'],
+    moderate: ['Moderate', 'Some signs point to a real fire, but it isn’t confirmed.'],
+    low: ['Weak', 'Few signs of a real fire so far. Single detections are often burn piles, farm burns, or sensor glitches.'],
+};
+
+function reasonList(title, items) {
+    if (!items.length) return '';
+    return `
+        <div class="popup__reasons-title">${title}</div>
+        <ul class="popup__reasons">${items.map((r) => `<li class="reason--${r.tone}">${e(r.text)}</li>`).join('')}</ul>`;
+}
 
 function unusualHTML(p) {
     if (!p.unusual) return '';
     const reasons = typeof p.reasons === 'string' ? JSON.parse(p.reasons) : p.reasons || [];
+    const [label, summary] = SIGNAL[p.unusual];
     return `
         <div class="popup__unusual popup__unusual--${p.unusual}">
-            <div class="popup__unusual-head">Stands out: <strong>${UNUSUAL_LABEL[p.unusual]}</strong></div>
-            <ul class="popup__reasons">${reasons.map((r) => `<li class="reason--${r.tone}">${e(r.text)}</li>`).join('')}</ul>
-            <p class="popup__fine">A ranking from satellite history and current weather, not a probability of fire.</p>
+            <div class="popup__unusual-head">Fire signal: <strong>${label}</strong></div>
+            <p class="popup__unusual-summary">${summary}</p>
+            ${reasonList('Points toward a fire', reasons.filter((r) => r.tone === 'alert' || r.tone === 'watch'))}
+            ${reasonList('Points against', reasons.filter((r) => r.tone === 'calm' || r.tone === 'info'))}
+            <p class="popup__fine">Based on satellite history, detections and weather. A rough ranking, not a probability.</p>
         </div>`;
 }
 
