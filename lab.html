@@ -13,7 +13,7 @@
                 <a class="lab__back" href="/">← California Fire Watch</a>
                 <h1 class="lab__title">Model lab</h1>
                 <p class="lab__sub">
-                    How well the "fire signal" on unconfirmed satellite heat predicts reported fires. Every hotspot in
+                    How well the alert level on unconfirmed satellite heat predicts reported fires. Every hotspot in
                     California is tracked from its first satellite pass, scored as data arrives, and later matched against
                     CAL FIRE and NIFC incident reports. Research only.
                 </p>
@@ -22,6 +22,45 @@
         </header>
 
         <main class="lab__main">
+            <details class="lab-card lab-card--wide lab-guide">
+                <summary class="lab-card__title">How scoring works, and what the terms mean</summary>
+                <div class="lab-guide__grid">
+                    <div>
+                        <h3 class="lab-h3">Alert levels</h3>
+                        <p>Each unconfirmed heat spot gets a points total from the signals below. <strong>5 or more points is Elevated</strong>,
+                            <strong>3–4 is Moderate</strong>, anything lower is Low. That's what "Elevated (5+)" and "Moderate (3+)" on the
+                            charts mean. It's a ranking, not a probability.</p>
+                        <table class="lab-table lab-guide__points">
+                            <thead><tr><th>Signal</th><th>Points</th></tr></thead>
+                            <tbody>
+                                <tr><td>No satellite heat at this spot in the past year</td><td>+2</td></tr>
+                                <tr><td>Rarely hot here (1–3 days in the past year)</td><td>+1</td></tr>
+                                <tr><td>Later passes moved downwind of the first</td><td>+2</td></tr>
+                                <tr><td>Thunderstorms in the area in the past 3 days (weather model)</td><td>+2</td></tr>
+                                <tr><td>3+ detections · 2+ satellites · high-confidence detection · 20+ MW heat output</td><td>+1 each</td></tr>
+                                <tr><td>Seen on a night pass · in wildland (forest, brush, grass)</td><td>+1 each</td></tr>
+                                <tr><td>Red Flag Warning · dry, windy weather at the spot</td><td>+1 each</td></tr>
+                                <tr><td>Farmland · bare ground · water · 0.25"+ rain in the past 3 days</td><td>−1 each</td></tr>
+                                <tr><td>Hot on 15+ days last year, a known industrial site, or 2+ of the past 5 days</td><td>−2</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h3 class="lab-h3">Terms</h3>
+                        <dl class="lab-guide__terms">
+                            <dt>Track</dt><dd>One heat spot followed over time. Detections within about 1¼ miles of each other are grouped into the same track.</dd>
+                            <dt>Pass</dt><dd>One satellite flying over (or, for GOES, one scan). Polar satellites pass a few times a day; GOES scans every 5–10 minutes.</dd>
+                            <dt>Detection</dt><dd>One satellite pixel flagged as hot. A fire usually lights up several pixels per pass.</dd>
+                            <dt>FRP</dt><dd>Fire radiative power: how much heat the fire gives off, in megawatts (MW). Under 5 MW is small (a burn pile or a fire's edge); 20+ MW is a strong, active fire.</dd>
+                            <dt>Collector</dt><dd>Our background job. Every 15 minutes it pulls the latest satellite data from NASA and scores each track. "We logged it" is when it got the data, usually 1–3 hours after the satellite actually saw the heat, because NASA needs time to process each pass. The <em>first pass</em> is the real first sighting.</dd>
+                            <dt>Outcome</dt><dd><em>Reported fire</em>: matched to a CAL FIRE or NIFC incident within 3 miles. <em>No report</em>: 72 hours with no new heat and no incident. <em>Recurring</em>: a spot that's hot most days (farms, flares). <em>On a known fire</em>: started next to a fire that was already reported.</dd>
+                            <dt>Lead time</dt><dd>How long before the agency's listed start time we had rated the track Moderate. Positive means we were earlier.</dd>
+                            <dt>Hit rate</dt><dd>Of the tracks that are settled, the share that turned out to be a reported fire.</dd>
+                        </dl>
+                    </div>
+                </div>
+            </details>
+
             <section class="lab-card">
                 <h2 class="lab-card__title">Scorecard</h2>
                 <p class="lab-card__hint">
@@ -62,17 +101,17 @@
                     <table class="lab-table" id="tracks">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>First pass</th>
+                                <th data-sort="id">#</th>
+                                <th data-sort="first_seen">First pass <span class="lab-tip" tabindex="0" data-tip="When a satellite first saw this heat. This is the real first sighting.">i</span></th>
                                 <th>Location</th>
-                                <th>Outcome</th>
-                                <th>Peak signal</th>
-                                <th>Passes</th>
-                                <th>Detections</th>
-                                <th>Max FRP</th>
-                                <th>Moderate flagged</th>
-                                <th>Reported as</th>
-                                <th>Lead time</th>
+                                <th data-sort="status">Outcome <span class="lab-tip" tabindex="0" data-tip="Reported fire: matched to a CAL FIRE or NIFC incident. No report: 72 hours with no new heat and no incident. Recurring: hot most days (farms, flares). On a known fire: next to a fire that was already reported.">i</span></th>
+                                <th data-sort="peak_score">Peak alert <span class="lab-tip" tabindex="0" data-tip="The highest alert level the track reached. Elevated = 5+ points, Moderate = 3–4, Low = under 3.">i</span></th>
+                                <th data-sort="passes">Passes <span class="lab-tip" tabindex="0" data-tip="How many satellite overpasses (or GOES scans) saw heat here.">i</span></th>
+                                <th data-sort="detections">Detections <span class="lab-tip" tabindex="0" data-tip="Total hot satellite pixels across all passes.">i</span></th>
+                                <th data-sort="max_frp">Max FRP <span class="lab-tip" tabindex="0" data-tip="Fire radiative power: heat output in megawatts. Under 5 MW is small; 20+ MW is a strong, active fire.">i</span></th>
+                                <th data-sort="moderate_known_at">Rated Moderate <span class="lab-tip" tabindex="0" data-tip="When our system first rated this track Moderate or higher, using only the data it had at that moment.">i</span></th>
+                                <th data-sort="incident_name">Reported as</th>
+                                <th data-sort="lead">Lead time <span class="lab-tip" tabindex="0" data-tip="How long before the agency's listed start time we rated it Moderate. Positive means we were earlier.">i</span></th>
                             </tr>
                         </thead>
                         <tbody></tbody>

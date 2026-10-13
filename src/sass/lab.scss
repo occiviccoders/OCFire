@@ -203,6 +203,106 @@ body.lab {
     overflow-y: auto;
 }
 
+#tracks th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+        color: $text;
+    }
+
+    &.is-sorted {
+        color: $text;
+    }
+
+    &::after {
+        content: attr(data-arrow);
+        font-size: 0.9rem;
+        margin-left: 0.4rem;
+    }
+}
+
+.lab-tip {
+    display: inline-grid;
+    place-items: center;
+    width: 1.4rem;
+    height: 1.4rem;
+    margin-left: 0.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    font-size: 0.95rem;
+    font-style: italic;
+    font-weight: 600;
+    line-height: 1;
+    color: $text-dim;
+    cursor: help;
+    vertical-align: middle;
+
+    &:hover,
+    &:focus-visible {
+        color: $text;
+        border-color: $text;
+        outline: none;
+    }
+}
+
+.lab-tooltip {
+    position: fixed;
+    z-index: 50;
+    max-width: 28rem;
+    padding: 0.8rem 1rem;
+    background: $panel-2;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 0.6rem;
+    color: $text;
+    font-size: 1.25rem;
+    line-height: 1.45;
+    white-space: normal;
+    pointer-events: none;
+}
+
+.lab-guide {
+    > summary {
+        cursor: pointer;
+        list-style: revert;
+    }
+
+    &__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(32rem, 1fr));
+        gap: 2.4rem;
+        margin-top: 1.2rem;
+        font-size: 1.35rem;
+        line-height: 1.55;
+
+        p {
+            color: $text-dim;
+            margin-bottom: 1rem;
+        }
+    }
+
+    &__points {
+        white-space: normal;
+
+        td:last-child {
+            text-align: right;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+    }
+
+    &__terms {
+        dt {
+            font-weight: 600;
+            margin-top: 0.9rem;
+        }
+
+        dd {
+            color: $text-dim;
+        }
+    }
+}
+
 .lab-empty {
     color: $text-dim;
     text-align: center !important;

@@ -16,7 +16,9 @@ const RESOLVED = new Set(['fire', 'not_reported', 'recurring']);
 const HOUR = 3600 * 1000;
 
 const $ = (sel) => document.querySelector(sel);
-const state = { tracks: [], status: null, unmountReplay: null };
+const state = { tracks: [], status: null, unmountReplay: null, sort: { key: 'first_seen', dir: -1 } };
+
+const tip = (text) => `<span class="lab-tip" tabindex="0" data-tip="${e(text)}">i</span>`;
 
 const getJSON = async (path) => {
     const res = await fetch(`${API}${path}`);
@@ -133,7 +135,14 @@ function renderScorecard() {
     $('#scorecard').innerHTML = `
         <div class="lab-table-wrap">
             <table class="lab-table lab-table--score">
-                <thead><tr><th>Signal</th><th>Tracks</th><th>Resolved</th><th>Reported fire</th><th>Hit rate</th><th>Median lead time</th></tr></thead>
+                <thead><tr>
+                    <th>Alert level</th>
+                    <th>Tracks</th>
+                    <th>Resolved ${tip('Settled: matched to a reported fire, or 72 hours with no new heat.')}</th>
+                    <th>Reported fire</th>
+                    <th>Hit rate ${tip('Of the resolved tracks, the share that turned out to be a reported fire.')}</th>
+                    <th>Median lead time ${tip('Typical time between when we had the track at this level and the agency’s listed start time. Positive means we were earlier.')}</th>
+                </tr></thead>
                 <tbody>${rows.join('')}</tbody>
             </table>
         </div>
@@ -141,8 +150,8 @@ function renderScorecard() {
             <li><strong>${early.length} of ${timed.length}</strong> reported fires reached Moderate before the agency's listed start time.</li>
             <li><strong>${missed.length} of ${fires.length}</strong> reported fires never got past Low (misses worth studying).</li>
             <li><strong>${largeFlagged.length} of ${large.length}</strong> reported fires that grew to 10+ acres reached Moderate or Elevated.</li>
-            <li class="lab-dim">Hit rate = share of resolved tracks that turned out to be a reported fire. Lead time compares when the
-                collector first saw the signal with the agency's start time; fires already listed before collection began are excluded.</li>
+            <li class="lab-dim">Lead time compares when our system had the track at that level with the agency's start time.
+                Fires already listed before collection began are left out.</li>
             ${resolvedCount < 30 ? '<li class="lab-dim">Still early: these numbers mean more once a few hundred tracks have resolved.</li>' : ''}
         </ul>`;
 }
@@ -192,8 +201,42 @@ function filteredTracks() {
     });
 }
 
+// Missing values sort last in either direction.
+const SORT_VALUE = {
+    id: (t) => t.id,
+    first_seen: (t) => t.first_seen,
+    status: (t) => STATUS[t.status] || t.status,
+    peak_score: (t) => t.peak_score,
+    passes: (t) => t.passes,
+    detections: (t) => t.detections,
+    max_frp: (t) => t.max_frp,
+    moderate_known_at: (t) => t.moderate_known_at,
+    incident_name: (t) => t.incident_name || t.known_at_start,
+    lead: (t) => leadHours(t, t.moderate_known_at),
+};
+
+function sortTracks(list) {
+    const { key, dir } = state.sort;
+    const value = SORT_VALUE[key];
+    return [...list].sort((a, b) => {
+        const va = value(a), vb = value(b);
+        if (va == null || vb == null) return (va == null) - (vb == null);
+        return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+    });
+}
+
+function renderSortHeaders() {
+    document.querySelectorAll('#tracks th[data-sort]').forEach((th) => {
+        const active = th.dataset.sort === state.sort.key;
+        th.classList.toggle('is-sorted', active);
+        th.setAttribute('aria-sort', active ? (state.sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+        th.dataset.arrow = active ? (state.sort.dir > 0 ? '▲' : '▼') : '';
+    });
+}
+
 function renderTracks() {
-    const list = filteredTracks();
+    renderSortHeaders();
+    const list = sortTracks(filteredTracks());
     const shown = list.slice(0, 500);
     $('#tracks tbody').innerHTML = shown.length
         ? shown.map((t) => `
@@ -302,13 +345,20 @@ function timelineEvents(t, incident, history, snapshots, detections, summary) {
             badge: snap ? `${levelBadge(snap.level)} score ${snap.score}` : '',
         });
     }
-    if (t.first_moderate_at) events.push({ at: t.first_moderate_at, kind: 'model', title: 'Signal reached Moderate', detail: 'Using satellite data through this pass' });
-    if (t.first_strong_at) events.push({ at: t.first_strong_at, kind: 'model', title: 'Signal reached Elevated', detail: 'Using satellite data through this pass' });
+    if (t.first_moderate_at) events.push({ at: t.first_moderate_at, kind: 'model', title: 'Alert reached Moderate (3+ points)', detail: 'Using satellite data through this pass' });
+    if (t.first_strong_at) events.push({ at: t.first_strong_at, kind: 'model', title: 'Alert reached Elevated (5+ points)', detail: 'Using satellite data through this pass' });
 
     const collected = detections.map((d) => d.collected_at).sort()[0];
-    if (collected) events.push({ at: collected, kind: 'collector', title: 'Collector first saw this heat' });
+    if (collected) {
+        events.push({
+            at: collected,
+            kind: 'collector',
+            title: 'We logged this heat',
+            detail: 'When our system received the satellite data. NASA usually publishes a pass 1–3 hours after the satellite sees it',
+        });
+    }
     if (summary.moderate_known_at && summary.moderate_known_at !== collected) {
-        events.push({ at: summary.moderate_known_at, kind: 'collector', title: 'Collector flagged it Moderate' });
+        events.push({ at: summary.moderate_known_at, kind: 'collector', title: 'We rated it Moderate' });
     }
 
     if (incident) {
@@ -318,7 +368,7 @@ function timelineEvents(t, incident, history, snapshots, detections, summary) {
         events.push({
             at: incident.first_seen,
             kind: 'collector',
-            title: 'Collector first saw the incident report',
+            title: 'We first saw the incident report',
             detail: incident.preexisting ? 'Already listed when collection began' : '',
         });
         events.push(...lifecycleEvents(incident, history));
@@ -360,7 +410,7 @@ function timelineHTML(events, t, incident) {
             <span><i class="lab-timeline__key--heat"></i>Satellite</span>
             <span><i class="lab-timeline__key--model"></i>Model</span>
             <span><i class="lab-timeline__key--official"></i>Official</span>
-            <span><i class="lab-timeline__key--collector"></i>Our collector</span>
+            <span><i class="lab-timeline__key--collector"></i>When our system logged it ${tip('Our background job checks NASA and the fire agencies every 15 minutes. These times show when it received each piece, which is usually later than when it happened.')}</span>
         </div>`;
 }
 
@@ -411,9 +461,9 @@ async function showDetail(id) {
             <div><dt>First pass</dt><dd>${shortDate(t.first_seen)}</dd></div>
             <div><dt>Latest pass</dt><dd>${shortDate(t.last_seen)}</dd></div>
             <div><dt>Detections / passes</dt><dd>${t.detections} / ${t.passes}</dd></div>
-            <div><dt>Max FRP</dt><dd>${num(t.max_frp, 1)} MW</dd></div>
-            <div><dt>Moderate (pass / seen)</dt><dd>${shortDate(t.first_moderate_at)} / ${shortDate(summary.moderate_known_at)}</dd></div>
-            <div><dt>Elevated (pass / seen)</dt><dd>${shortDate(t.first_strong_at)} / ${shortDate(summary.strong_known_at)}</dd></div>
+            <div><dt>Max FRP ${tip('Fire radiative power: heat output in megawatts. Under 5 MW is small; 20+ MW is a strong, active fire.')}</dt><dd>${num(t.max_frp, 1)} MW</dd></div>
+            <div><dt>Moderate: pass / we logged it ${tip('The satellite pass whose data first put it at Moderate, and when our system actually had that data.')}</dt><dd>${shortDate(t.first_moderate_at)} / ${shortDate(summary.moderate_known_at)}</dd></div>
+            <div><dt>Elevated: pass / we logged it ${tip('Same as above, for Elevated (5+ points).')}</dt><dd>${shortDate(t.first_strong_at)} / ${shortDate(summary.strong_known_at)}</dd></div>
             <div><dt>Reported as</dt><dd>${t.incident_name ? `${e(t.incident_name)} <span class="lab-dim">(${e(t.incident_source || '')})</span>` : t.known_at_start ? e(t.known_at_start) : '—'}</dd></div>
             <div><dt>Official discovery</dt><dd>${shortDate(incident?.started)}${incident?.preexisting ? ' <span class="lab-dim">(listed before collection began)</span>' : ''}</dd></div>
             <div><dt>Official record created</dt><dd>${shortDate(incident?.reported)}</dd></div>
@@ -421,14 +471,28 @@ async function showDetail(id) {
         <h3 class="lab-h3">Timeline</h3>
         ${detections.length ? '<div class="lab-replay-wrap" data-replay><p class="lab-dim">Loading map…</p></div>' : ''}
         ${timelineHTML(events, t, incident)}
-        ${snapshots.length > 1 ? `<h3 class="lab-h3">Signal score by satellite pass</h3>${scoreChart(snapshots, t)}` : ''}
+        ${snapshots.length > 1 ? `<h3 class="lab-h3">Alert points by satellite pass ${tip('Each dot is the points total after a pass. 5+ is Elevated, 3–4 Moderate, under 3 Low. See "How scoring works" at the top.')}</h3>${scoreChart(snapshots, t)}` : ''}
         <h3 class="lab-h3">Why, as of the latest pass</h3>
         ${reasonsHTML(latest)}
         <h3 class="lab-h3">Every pass</h3>
         <div class="lab-table-wrap">
             <table class="lab-table">
-                <thead><tr><th>Pass</th><th>Seen</th><th>Det.</th><th>Sats</th><th>FRP</th><th>Spread</th><th>Drift</th>
-                    <th>Wind</th><th>Humidity</th><th>Weather</th><th>Red Flag</th><th>Smoke</th><th>CHP calls</th><th>Past yr</th><th>Score</th></tr></thead>
+                <thead><tr>
+                    <th>Pass ${tip('When the satellite flew over.')}</th>
+                    <th>Logged ${tip('When our system received that pass from NASA.')}</th>
+                    <th>Det. ${tip('Detections: hot satellite pixels so far.')}</th>
+                    <th>Sats ${tip('How many different satellites have seen it.')}</th>
+                    <th>FRP ${tip('Total heat output in megawatts across detections.')}</th>
+                    <th>Spread ${tip('Widest distance between any two detections.')}</th>
+                    <th>Drift ${tip('How far later detections sit from the first one, and in which direction. Moving with the wind is a fire sign.')}</th>
+                    <th>Wind</th><th>Humidity</th>
+                    <th>Weather ${tip('Fire weather at the spot: normal, elevated (dry and breezy) or critical (Red Flag-level).')}</th>
+                    <th>Red Flag ${tip('Inside a National Weather Service Red Flag Warning.')}</th>
+                    <th>Smoke ${tip('Smoke plume over the spot in NOAA satellite smoke maps.')}</th>
+                    <th>CHP calls ${tip('Fire-related calls on the CHP incident feed within 3 miles in the last 6 hours.')}</th>
+                    <th>Past yr ${tip('Days with satellite heat at this spot in the past year. Many days means a farm, flare or landfill.')}</th>
+                    <th>Points ${tip('Alert points after this pass. 5+ Elevated, 3–4 Moderate.')}</th>
+                </tr></thead>
                 <tbody>${snapshots.map((s) => `
                     <tr>
                         <td>${shortDate(s.pass_time)}</td>
@@ -478,6 +542,48 @@ function nearestTrackId(near) {
     return close.sort((a, b) => b.last_seen.localeCompare(a.last_seen))[0]?.id ?? null;
 }
 
+// One floating box for every [data-tip], positioned on screen so table scroll areas can't clip it.
+function wireTooltips() {
+    const box = document.createElement('div');
+    box.className = 'lab-tooltip';
+    box.hidden = true;
+    document.body.append(box);
+    let current = null;
+    const show = (el) => {
+        current = el;
+        box.textContent = el.dataset.tip;
+        box.hidden = false;
+        const r = el.getBoundingClientRect();
+        const w = box.offsetWidth;
+        box.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+        const below = r.bottom + 8 + box.offsetHeight < window.innerHeight;
+        box.style.top = `${below ? r.bottom + 8 : r.top - box.offsetHeight - 8}px`;
+    };
+    const hide = () => {
+        current = null;
+        box.hidden = true;
+    };
+    document.addEventListener('mouseover', (ev) => {
+        const el = ev.target.closest('[data-tip]');
+        if (el && el !== current) show(el);
+        else if (!el && current) hide();
+    });
+    document.addEventListener('focusin', (ev) => {
+        const el = ev.target.closest('[data-tip]');
+        if (el) show(el);
+    });
+    document.addEventListener('focusout', hide);
+    document.addEventListener('click', (ev) => {
+        const el = ev.target.closest('[data-tip]');
+        if (el) {
+            ev.stopPropagation();
+            if (el === current) hide();
+            else show(el);
+        } else if (current) hide();
+    }, true);
+    window.addEventListener('scroll', hide, { passive: true, capture: true });
+}
+
 async function init() {
     try {
         [state.status, state.tracks] = await Promise.all([getJSON('/api/status'), getJSON('/api/tracks')]);
@@ -493,6 +599,17 @@ async function init() {
     $('#filter-status').addEventListener('change', renderTracks);
     $('#filter-signal').addEventListener('change', renderTracks);
     $('#download').addEventListener('click', downloadCSV);
+    $('#tracks thead').addEventListener('click', (ev) => {
+        if (ev.target.closest('.lab-tip')) return;
+        const th = ev.target.closest('th[data-sort]');
+        if (!th) return;
+        const key = th.dataset.sort;
+        // Text columns start A→Z; numbers and dates start biggest/newest first.
+        const ascFirst = key === 'status' || key === 'incident_name';
+        state.sort = state.sort.key === key ? { key, dir: -state.sort.dir } : { key, dir: ascFirst ? 1 : -1 };
+        renderTracks();
+    });
+    wireTooltips();
     $('#tracks tbody').addEventListener('click', (ev) => {
         if (ev.target.closest('[data-stop]')) return;
         const row = ev.target.closest('tr[data-id]');
