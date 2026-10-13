@@ -72,7 +72,7 @@ export function assess(cluster, info, { past, priorDays, wind, redFlag, site = n
     let score = 0;
     const add = (points, tone, text) => {
         score += points;
-        reasons.push({ tone, text });
+        reasons.push({ tone, text, points });
     };
 
     if (past) {

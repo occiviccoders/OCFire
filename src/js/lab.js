@@ -282,7 +282,8 @@ function scoreChart(snapshots, track) {
             ${reported ? `<line class="lab-chart__reported" x1="${x(reported)}" x2="${x(reported)}" y1="${PAD.t}" y2="${H - PAD.b}"/>
                 <text class="lab-chart__label lab-chart__label--reported" x="${x(reported) + 4}" y="${PAD.t + 10}">Agency start time</text>` : ''}
             <path class="lab-chart__line" d="${path}"/>
-            ${snapshots.map((s, i) => `<circle class="lab-chart__pt lab-chart__pt--${e(s.level)}" cx="${x(times[i])}" cy="${y(s.score)}" r="4"><title>${shortDate(s.pass_time)} · score ${s.score}</title></circle>`).join('')}
+            ${snapshots.length <= 30 ? snapshots.map((s, i) => `<text class="lab-chart__score" x="${x(times[i])}" y="${y(s.score) - 9}" text-anchor="middle">${s.score}</text>`).join('') : ''}
+            ${snapshots.map((s, i) => `<circle class="lab-chart__pt lab-chart__pt--${e(s.level)}" cx="${x(times[i])}" cy="${y(s.score)}" r="5"><title>${shortDate(s.pass_time)} · ${s.score} points (click for reasons)</title></circle>`).join('')}
             ${ticks.join('')}
         </svg>`;
 }
@@ -414,14 +415,86 @@ function timelineHTML(events, t, incident) {
         </div>`;
 }
 
+// Snapshots saved before reasons carried their points: recover them from the wording assess() uses.
+const REASON_POINTS = [
+    [/industrial heat source/, -2],
+    [/^No satellite heat within/, 2],
+    [/^Rarely hot here/, 1],
+    [/^Sometimes hot here/, 0],
+    [/^Hot on \d+ days in the past year/, -2],
+    [/^Hot on \d+ of the previous 5 days/, -2],
+    [/^\d+ detections$/, 1],
+    [/^Only one detection/, 0],
+    [/^Seen by \d+ satellites/, 1],
+    [/^Seen by only one/, 0],
+    [/^High-confidence/, 1],
+    [/^Strong heat output/, 1],
+    [/^Seen at night/, 1],
+    [/^In wildland/, 1],
+    [/burning is common|can show up as heat|^Over water/, -1],
+    [/^In a developed area/, 0],
+    [/^Thunderstorms/, 2],
+    [/of rain here in the past 3 days/, -1],
+    [/^No rain here/, 0],
+    [/^Inside a Red Flag/, 1],
+    [/^Red-flag-level weather|^Elevated fire weather/, 1],
+    [/^No fire-weather concern/, 0],
+    [/in line with the wind/, 2],
+];
+const reasonPoints = (r) => r.points ?? REASON_POINTS.find(([re]) => re.test(r.text))?.[1] ?? null;
+const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
+
 function reasonsHTML(snapshot) {
     let reasons = [];
     try {
         reasons = JSON.parse(snapshot?.reasons || '[]');
     } catch {}
-    return reasons.length
-        ? `<ul class="lab-reasons">${reasons.map((r) => `<li class="lab-reasons__item lab-reasons__item--${e(r.tone)}">${e(r.text)}</li>`).join('')}</ul>`
-        : '<p class="lab-dim">No reasons recorded.</p>';
+    if (!reasons.length) return '<p class="lab-dim">No reasons recorded.</p>';
+    const items = reasons
+        .map((r) => ({ ...r, pts: reasonPoints(r) }))
+        .sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0));
+    return `
+        <ul class="lab-reasons">${items.map((r) => `
+            <li class="lab-reasons__item lab-reasons__item--${e(r.tone)}">
+                <span class="lab-pts lab-pts--${r.pts > 0 ? 'up' : r.pts < 0 ? 'down' : 'zero'}">${r.pts == null ? '?' : signed(r.pts)}</span>
+                <span>${e(r.text)}</span>
+            </li>`).join('')}
+        </ul>
+        <p class="lab-reasons__total">Total: <strong>${snapshot.score} point${Math.abs(snapshot.score) === 1 ? '' : 's'}</strong> → ${levelBadge(snapshot.level)}
+            <span class="lab-dim">(5+ Elevated · 3–4 Moderate · under 3 Low)</span></p>`;
+}
+
+// "Why" panel with a slider across every pass, so you can watch the points change.
+function whyHTML(snapshots) {
+    if (!snapshots.length) return '<p class="lab-dim">No passes scored yet.</p>';
+    const last = snapshots.length - 1;
+    return `
+        ${snapshots.length > 1 ? `
+            <div class="lab-why__scrub">
+                <input type="range" min="0" max="${last}" value="${last}" step="1" data-why-slider aria-label="Satellite pass">
+                <span class="lab-why__label" data-why-label></span>
+            </div>` : ''}
+        <div data-why-body>${reasonsHTML(snapshots[last])}</div>`;
+}
+
+function wireWhy(panel, snapshots) {
+    const slider = panel.querySelector('[data-why-slider]');
+    const label = panel.querySelector('[data-why-label]');
+    const body = panel.querySelector('[data-why-body]');
+    const select = (i) => {
+        const s = snapshots[i];
+        body.innerHTML = reasonsHTML(s);
+        if (slider) slider.value = String(i);
+        if (label) {
+            const prev = snapshots[i - 1];
+            const change = prev ? s.score - prev.score : null;
+            label.innerHTML = `Pass ${i + 1} of ${snapshots.length} · ${shortDate(s.pass_time)} · ${s.score} pts${change ? ` <span class="lab-dim">(${signed(change)} from previous)</span>` : ''}`;
+        }
+        panel.querySelectorAll('.lab-chart__pt').forEach((c, j) => c.classList.toggle('is-current', j === i));
+    };
+    slider?.addEventListener('input', () => select(Number(slider.value)));
+    panel.querySelectorAll('.lab-chart__pt').forEach((c, j) => c.addEventListener('click', () => select(j)));
+    select(snapshots.length - 1);
 }
 
 async function showDetail(id) {
@@ -472,8 +545,8 @@ async function showDetail(id) {
         ${detections.length ? '<div class="lab-replay-wrap" data-replay><p class="lab-dim">Loading map…</p></div>' : ''}
         ${timelineHTML(events, t, incident)}
         ${snapshots.length > 1 ? `<h3 class="lab-h3">Alert points by satellite pass ${tip('Each dot is the points total after a pass. 5+ is Elevated, 3–4 Moderate, under 3 Low. See "How scoring works" at the top.')}</h3>${scoreChart(snapshots, t)}` : ''}
-        <h3 class="lab-h3">Why, as of the latest pass</h3>
-        ${reasonsHTML(latest)}
+        <h3 class="lab-h3">Why: points by reason ${tip('Each reason adds or removes points. Drag the slider (or click a dot on the chart) to see the reasons after any pass.')}</h3>
+        ${whyHTML(snapshots)}
         <h3 class="lab-h3">Every pass</h3>
         <div class="lab-table-wrap">
             <table class="lab-table">
@@ -513,6 +586,7 @@ async function showDetail(id) {
                     </tr>`).join('')}</tbody>
             </table>
         </div>`;
+    wireWhy(panel, snapshots);
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const replay = panel.querySelector('[data-replay]');
