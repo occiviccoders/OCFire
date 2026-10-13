@@ -100,7 +100,7 @@ function hotspotContextHTML({ near, stale } = {}) {
     }
     return stale
         ? `<p class="popup__summary">Not near any reported fire. It's more than 12 hours old, so it's no longer scored as possible new heat.</p>`
-        : `<p class="popup__summary">Not near any reported fire. It's included in the possible-new-fire marker here.</p>`;
+        : `<p class="popup__summary">Not near any reported fire. It's part of the unconfirmed-heat marker here.</p>`;
 }
 
 export function hotspotPopup(p, context, coords) {
@@ -131,9 +131,9 @@ export function fireWeatherPopup(p) {
 }
 
 const SIGNAL = {
-    high: ['Strong', 'Several signs point to a real, active fire.'],
-    moderate: ['Moderate', 'Some signs point to a real fire, but it isn’t confirmed.'],
-    low: ['Weak', 'Few signs of a real fire so far. Single detections are often burn piles, farm burns, or sensor glitches.'],
+    high: ['Elevated', 'Many signs point to a fire. No agency has reported one here yet.'],
+    moderate: ['Moderate', 'Some signs point to a fire. No agency has reported one here yet.'],
+    low: ['Low', 'Few signs of a fire so far. Single detections are often burn piles, farm burns, or sensor glitches.'],
 };
 
 function reasonList(title, items) {
@@ -149,11 +149,11 @@ function unusualHTML(p) {
     const [label, summary] = SIGNAL[p.unusual];
     return `
         <div class="popup__unusual popup__unusual--${p.unusual}">
-            <div class="popup__unusual-head">Fire signal: <strong>${label}</strong></div>
+            <div class="popup__unusual-head">Alert level: <strong>${label}</strong></div>
             <p class="popup__unusual-summary">${summary}</p>
             ${reasonList('Points toward a fire', reasons.filter((r) => r.tone === 'alert' || r.tone === 'watch'))}
             ${reasonList('Points against', reasons.filter((r) => r.tone === 'calm' || r.tone === 'info'))}
-            <p class="popup__fine">Based on satellite history, detections and weather. A rough ranking, not a probability.</p>
+            <p class="popup__fine">Based on satellite detections and history, land cover, and recent weather. A rough ranking, not a probability.</p>
         </div>`;
 }
 
@@ -178,11 +178,11 @@ export function heatPopup(p, cameras, coords) {
                 ${detectionRecordHTML(p, coords)}
             </div>`;
     }
-    const likely = p.strength === 'likely';
+    const tone = p.unusual === 'high' ? 'redflag' : p.unusual === 'moderate' ? 'watch' : 'low';
     return `
-        <div class="popup popup--${likely ? 'redflag' : 'watch'}">
+        <div class="popup popup--${tone}">
             <div class="popup__eyebrow">Satellite heat · not matched to a known fire</div>
-            <h3 class="popup__title">${likely ? 'Likely new fire' : 'Possible new fire'}</h3>
+            <h3 class="popup__title">Unconfirmed heat · ${SIGNAL[p.unusual]?.[0] || 'Low'} alert</h3>
             <dl class="popup__stats">
                 <div><dt>Detections</dt><dd>${p.count}</dd></div>
                 <div><dt>Satellites</dt><dd>${p.satellites}</dd></div>

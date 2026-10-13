@@ -2,6 +2,7 @@ import { bboxOf, distanceMiles, featureCollection } from './util.js';
 import { pointInGeometry } from './geo.js';
 import { historyAt } from './sources/baseline.js';
 import { compass } from './wind/fireWeather.js';
+import { DRY_DAYS_MAX, landKind, landLabel } from './siteFacts.js';
 
 export const RECENT_HOURS = 12;
 export const CLUSTER_MI = 1.25;
@@ -44,12 +45,29 @@ function bearing([lng1, lat1], [lng2, lat2]) {
 }
 
 // Bump whenever assess() changes, so stored research snapshots record which rules produced them.
-export const RULES_VERSION = 2;
+export const RULES_VERSION = 3;
+const RAINY_IN = 0.25;
+
+function siteReasons(site, add) {
+    if (!site) return;
+    const kind = landKind(site.land);
+    const label = landLabel(site.land);
+    if (kind === 'wildland') add(1, 'watch', `In wildland (${label}), away from farm fields and buildings`);
+    else if (kind === 'farm') add(-1, 'calm', `On ${label}, where field and crop burning is common`);
+    else if (kind === 'developed') add(0, 'info', 'In a developed area: could be a building, vehicle or industrial fire');
+    else if (kind === 'barren') add(-1, 'calm', `On ${label}, which can show up as heat`);
+    else if (kind === 'water') add(-1, 'calm', 'Over water: likely a boat, platform or sensor glitch');
+
+    if (site.thunder3) add(2, 'alert', 'Thunderstorms in the area in the past 3 days (weather model). Lightning fires can smolder for days before flaring up');
+    if (site.rain3 >= RAINY_IN) add(-1, 'calm', `${site.rain3}" of rain here in the past 3 days`);
+    else if (site.dryDays >= DRY_DAYS_MAX) add(0, 'watch', 'No rain here in the past 2 weeks');
+}
 
 // How strong the fire signal is for a cluster: a points tally with the reasons shown to the user.
 // It's a ranking aid, not a calibrated probability of fire. Also used by workers/collector.
-// cluster: detection features with properties.acquired; info: { count, satellites, high, maxFrp }.
-export function assess(cluster, info, { past, priorDays, wind, redFlag }) {
+// cluster: detection features with properties.acquired and daynight; info: { count, satellites, high, maxFrp }.
+// site: { land, rain3, thunder3, dryDays } from siteFacts.js, or null while it loads.
+export function assess(cluster, info, { past, priorDays, wind, redFlag, site = null }) {
     const reasons = [];
     let score = 0;
     const add = (points, tone, text) => {
@@ -73,6 +91,8 @@ export function assess(cluster, info, { past, priorDays, wind, redFlag }) {
     else if (info.count > 1) add(0, 'calm', 'Seen by only one satellite');
     if (info.high) add(1, 'watch', 'High-confidence detection');
     if (info.maxFrp >= STRONG_FRP_MW) add(1, 'watch', `Strong heat output: ${Math.round(info.maxFrp)} MW`);
+    if (cluster.some((f) => f.properties.daynight === 'N')) add(1, 'watch', 'Seen at night, when farm and debris burning are rare');
+    siteReasons(site, add);
 
     if (redFlag) add(1, 'alert', 'Inside a Red Flag Warning');
     if (wind?.level === 'critical') add(1, 'alert', `Red-flag-level weather here: gusts ${Math.round(wind.gust)} mph, humidity ${Math.round(wind.rh)}%`);
@@ -101,7 +121,8 @@ export function assess(cluster, info, { past, priorDays, wind, redFlag }) {
 // context.baseline: one-year cell history (see fetchBaseline). context.windAt(coords): current conditions.
 // context.fireWeather: NWS Red Flag Warning / Fire Weather Watch polygons.
 // context.reported: NIFC incident locations (see sources/reportedIncidents.js), treated like CAL FIRE incidents.
-export function findUnmatchedHeat(hotspots, incidents, perimeters, { history = [], baseline = null, windAt = () => null, fireWeather = null, reported = null } = {}) {
+// context.siteAt(coords): siteFacts for a cluster center once loaded, else null.
+export function findUnmatchedHeat(hotspots, incidents, perimeters, { history = [], baseline = null, windAt = () => null, siteAt = () => null, fireWeather = null, reported = null } = {}) {
     const redFlags = (fireWeather?.features || []).filter((f) => f.properties.event === 'Red Flag Warning');
     const cutoff = Date.now() - RECENT_HOURS * 3600000;
     const known = perimeters.features.map((f) => bboxOf(f.geometry));
@@ -145,6 +166,7 @@ export function findUnmatchedHeat(hotspots, incidents, perimeters, { history = [
                 priorDays,
                 wind: windAt([lng, lat]),
                 redFlag: redFlags.some((f) => pointInGeometry([lng, lat], f.geometry)),
+                site: siteAt([lng, lat]),
             });
             return {
                 type: 'Feature',

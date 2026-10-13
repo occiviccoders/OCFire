@@ -20,6 +20,7 @@ import { createIncidentMarkers } from './incidentMarkers.js';
 import { closeSheet, createMapCard, sheetOverlap } from './mapCard.js';
 import { showDisclaimerIfNeeded } from './about.js';
 import { fetchWindForecast } from './sources/weather.js';
+import { fetchSiteFacts } from './siteFacts.js';
 import { fetchPointAirQuality } from './sources/airQuality.js';
 import { WindParticles } from './wind/particles.js';
 import { addWindArrowLayer, windArrowData } from './wind/arrows.js';
@@ -159,14 +160,36 @@ function hotspotContext(coords, p) {
     return { near, stale: Date.now() - Date.parse(p.acquired) > RECENT_HOURS * 3600000 };
 }
 
-function updateUnmatchedHeat() {
+// Land cover and recent rain/thunderstorms per heat cluster, keyed by center rounded to ~1 km.
+const SITE_FACTS_MS = 60 * 60 * 1000;
+const siteFacts = new Map();
+const siteKey = ([lng, lat]) => `${lng.toFixed(2)},${lat.toFixed(2)}`;
+
+async function loadSiteFacts(clusters) {
+    const due = clusters.filter((f) => {
+        const hit = siteFacts.get(siteKey(f.geometry.coordinates));
+        return !hit || Date.now() - hit.at > SITE_FACTS_MS;
+    });
+    if (!due.length) return;
+    const points = due.map((f) => f.geometry.coordinates);
+    for (const p of points) siteFacts.set(siteKey(p), { at: Date.now(), facts: siteFacts.get(siteKey(p))?.facts ?? null });
+    const facts = await fetchSiteFacts(points).catch(() => null);
+    if (!facts) return;
+    points.forEach((p, i) => siteFacts.set(siteKey(p), { at: Date.now(), facts: facts[i] }));
+    updateUnmatchedHeat({ loadFacts: false });
+    renderList();
+}
+
+function updateUnmatchedHeat({ loadFacts = true } = {}) {
     state.unmatchedHeat = findUnmatchedHeat(state.hotspots, state.incidents, state.perimeters, {
         ...state.heatContext,
         fireWeather: state.fireWeather,
         // Scored on current conditions, not the timeline hour.
         windAt: (coords) => (state.wind.forecast ? conditionsAt(state.wind.forecast, 0, coords) : null),
+        siteAt: (coords) => siteFacts.get(siteKey(coords))?.facts ?? null,
     });
     map.getSource('unmatched-heat').setData(state.unmatchedHeat);
+    if (loadFacts) loadSiteFacts(state.unmatchedHeat.features.filter((f) => f.properties.strength !== 'persistent'));
 }
 
 function setSelection(id) {

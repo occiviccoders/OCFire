@@ -9,7 +9,7 @@ maplibregl.setWorkerUrl(maplibreWorkerUrl);
 const HOUR = 3600 * 1000;
 const PLAY_MS = 9000;
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-const LEVEL = { high: 'Strong', moderate: 'Moderate', low: 'Weak' };
+const LEVEL = { high: 'Elevated', moderate: 'Moderate', low: 'Low' };
 
 const STYLE = {
     version: 8,

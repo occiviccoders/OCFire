@@ -511,8 +511,9 @@
     &--warm { border-left-color: $fire-warm; }
     &--out { border-left-color: $fire-out; }
     &--heat { border-left-style: dashed; }
-    &--heat-likely { border-left-color: $redflag; }
-    &--heat-possible { border-left-color: $watch; }
+    &--heat-high { border-left-color: $redflag; }
+    &--heat-moderate { border-left-color: $watch; }
+    &--heat-low { border-left-color: rgba($watch, 0.35); }
 
     &__top {
         display: flex;

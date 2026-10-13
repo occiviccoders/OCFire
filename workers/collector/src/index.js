@@ -15,6 +15,7 @@ import { fireWeatherLevel } from '../../../src/js/wind/fireWeather.js';
 import { pointInGeometry } from '../../../src/js/geo.js';
 import { distanceMiles } from '../../../src/js/util.js';
 import { CA_BBOX } from '../../../src/js/config.js';
+import { fetchLandCover, fetchSiteFacts } from '../../../src/js/siteFacts.js';
 
 const UA = 'California Fire Watch research collector (info@initialapps.com)';
 const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT', 'GOES_NRT'];
@@ -30,6 +31,7 @@ const MATCH_BEFORE_MS = 24 * HOUR; // incident start may precede first detection
 const MATCH_AFTER_MS = 72 * HOUR;
 const CHP_MI = 3;
 const RECURRING_PAST_DAYS = 15;
+const LAND_LOOKUPS_PER_RUN = 10;
 // Year-to-date, not "Current": contained incidents drop out of Current, and we need their later updates.
 const WFIGS = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_YearToDate/FeatureServer/0/query';
 
@@ -355,7 +357,7 @@ async function snapshotTracks(db, trackIds, ctx, nowIso) {
     if (!trackIds.length) return 0;
     const marks = trackIds.map(() => '?').join(',');
     const { results: tracks } = await db.prepare(`SELECT * FROM tracks WHERE id IN (${marks})`).bind(...trackIds).all();
-    const { results: dets } = await db.prepare(`SELECT track_id, lat, lng, acquired, satellite, instrument, confidence, frp FROM detections WHERE track_id IN (${marks})`).bind(...trackIds).all();
+    const { results: dets } = await db.prepare(`SELECT track_id, lat, lng, acquired, satellite, instrument, confidence, frp, daynight FROM detections WHERE track_id IN (${marks})`).bind(...trackIds).all();
     const byTrack = new Map(tracks.map((t) => [t.id, []]));
     for (const d of dets) byTrack.get(d.track_id)?.push({ ...d, goes: d.instrument === 'ABI' });
     // GOES pixels are ~2 km: use the finer satellites for position, extent and drift when there are any.
@@ -371,12 +373,26 @@ async function snapshotTracks(db, trackIds, ctx, nowIso) {
     } catch (err) {
         ctx.errors.push(`weather: ${err.message}`);
     }
-
+    // Land cover is looked up once per track and kept; a few per run keeps Worker subrequests in budget.
     const statements = [];
+    const needLand = tracks.filter((t) => t.land == null).slice(0, LAND_LOOKUPS_PER_RUN);
+    await Promise.all(needLand.map(async (t) => {
+        t.land = await fetchLandCover([t.lng, t.lat], ctx.site).catch(() => null);
+        if (t.land != null) statements.push(db.prepare('UPDATE tracks SET land = ? WHERE id = ?').bind(t.land, t.id));
+    }));
+    let facts = [];
+    try {
+        facts = await fetchSiteFacts(centroids, { land: false });
+    } catch (err) {
+        ctx.errors.push(`site facts: ${err.message}`);
+    }
+
     tracks.forEach((t, i) => {
         const ds = byTrack.get(t.id).sort((a, b) => a.acquired.localeCompare(b.acquired));
         const center = centroids[i];
-        const cluster = ds.map((d) => ({ geometry: { coordinates: [d.lng, d.lat] }, properties: { acquired: d.acquired, goes: d.goes } }));
+        const cluster = ds.map((d) => ({ geometry: { coordinates: [d.lng, d.lat] }, properties: { acquired: d.acquired, goes: d.goes, daynight: d.daynight } }));
+        const site = { ...(facts[i] || {}), land: t.land ?? null };
+        const night = ds.some((d) => d.daynight === 'N') ? 1 : 0;
         const fine = ds.filter((d) => !d.goes);
         const info = {
             // GOES rescans every 5–10 min, so each GOES satellite counts once (matches findUnmatchedHeat).
@@ -409,19 +425,21 @@ async function snapshotTracks(db, trackIds, ctx, nowIso) {
         const redFlag = ctx.redFlags.some((g) => pointInGeometry(center, g));
         const smoke = Math.max(0, ...ctx.smoke.filter((s) => pointInGeometry(center, s.geometry)).map((s) => s.level));
         const chp = ctx.chp.filter((c) => distanceMiles(c, center) <= CHP_MI).length;
-        const result = assess(cluster, info, { past, priorDays, wind, redFlag });
+        const result = assess(cluster, info, { past, priorDays, wind, redFlag, site });
         const passTime = ds.at(-1).acquired;
         const reached = (lvl) => LEVEL_RANK[result.level] >= LEVEL_RANK[lvl];
 
         statements.push(db.prepare(`
             INSERT INTO snapshots (track_id, taken_at, pass_time, detections, satellites, high_confidence, max_frp, sum_frp,
                 extent_mi, drift_mi, drift_bearing, wind_speed, wind_gust, wind_dir, humidity, temp_f, weather_level,
-                red_flag, smoke_level, chp_fire_reports, past_days, prior_days, score, level, reasons, rules_version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+                red_flag, smoke_level, chp_fire_reports, past_days, prior_days, score, level, reasons, rules_version,
+                night, rain_3d, thunder_3d, dry_days)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
             t.id, nowIso, passTime, info.count, info.satellites, info.high, info.maxFrp, sumFrp,
             extent, drift, driftBearing, wind?.speed ?? null, wind?.gust ?? null, wind?.dir ?? null, wind?.rh ?? null, wind?.temp ?? null,
             wind?.level ?? null, redFlag ? 1 : 0, smoke, chp, past?.days ?? null, priorDays, result.score, result.level,
             JSON.stringify(result.reasons), RULES_VERSION,
+            night, site.rain3 ?? null, site.thunder3 == null ? null : site.thunder3 ? 1 : 0, site.dryDays ?? null,
         ));
         statements.push(db.prepare(`
             UPDATE tracks SET last_seen = ?2, lat = ?3, lng = ?4, detections = ?5, passes = passes + 1, max_frp = ?6,
@@ -500,7 +518,7 @@ async function collect(env) {
     const incidentsWritten = await upsertIncidents(db, incidents, nowIso, firstRunAt);
     const fresh = await insertDetections(db, hotspots, nowIso);
     const { touched, created } = await assignTracks(db, fresh, incidents, now, nowIso);
-    const snapshots = await snapshotTracks(db, touched, { baseline, history, redFlags, smoke, chp, errors }, nowIso);
+    const snapshots = await snapshotTracks(db, touched, { baseline, history, redFlags, smoke, chp, errors, site }, nowIso);
     const labeled = await labelTracks(db, now, nowIso);
 
     const summary = { new_detections: fresh.length, new_tracks: created, snapshots, labeled, incidents_written: incidentsWritten, errors: errors.length ? errors.join('; ') : null };

@@ -43,14 +43,14 @@ function incidentItem(p, selectedId) {
 function heatItem(p) {
     return `
         <li>
-            <button class="incident incident--heat incident--heat-${p.strength}" data-heat="${e(p.id)}">
+            <button class="incident incident--heat incident--heat-${p.unusual}" data-heat="${e(p.id)}">
                 <div class="incident__top">
-                    <span class="incident__name">${p.strength === 'likely' ? 'Likely' : 'Possible'} new fire</span>
+                    <span class="incident__name">Unconfirmed heat</span>
                     <span class="incident__dist">${formatMiles(p.distance)}</span>
                 </div>
                 <div class="incident__nums">
                     <span>${p.count} satellite detection${p.count === 1 ? '' : 's'}</span>
-                    ${p.unusual === 'high' || p.unusual === 'moderate' ? `<span class="incident__unusual incident__unusual--${p.unusual}">${p.unusual === 'high' ? 'Strong signal' : 'Moderate signal'}</span>` : ''}
+                    ${p.unusual === 'high' || p.unusual === 'moderate' ? `<span class="incident__unusual incident__unusual--${p.unusual}">${p.unusual === 'high' ? 'Elevated alert' : 'Moderate alert'}</span>` : ''}
                     <span class="incident__updated">${timeAgo(p.latest)}</span>
                 </div>
             </button>

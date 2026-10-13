@@ -245,7 +245,10 @@ export function addHazardLayers(map) {
         },
     }, 'hotspots-glow');
 
-    // Possible new fires: a dashed ring around heat that no known fire explains.
+    // Unconfirmed heat: a ring around heat that no known fire explains, colored by alert level.
+    // Only Moderate and Elevated pulse.
+    const byLevel = (persistent, high, moderate, low) =>
+        ['case', ['==', ['get', 'strength'], 'persistent'], persistent, ['match', ['get', 'unusual'], 'high', high, 'moderate', moderate, low]];
     map.addLayer({
         id: 'heat-pulse',
         type: 'circle',
@@ -253,11 +256,11 @@ export function addHazardLayers(map) {
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 10, 12, 30],
             'circle-color': 'rgba(0,0,0,0)',
-            'circle-stroke-color': ['match', ['get', 'strength'], 'likely', '#ff2d78', '#ffc93c'],
+            'circle-stroke-color': ['match', ['get', 'unusual'], 'high', '#ff2d78', '#ffc93c'],
             'circle-stroke-width': 2,
             'circle-stroke-opacity': 0.6,
         },
-        filter: ['!=', ['get', 'strength'], 'persistent'],
+        filter: ['all', ['!=', ['get', 'strength'], 'persistent'], ['in', ['get', 'unusual'], ['literal', ['high', 'moderate']]]],
     }, 'perimeters-label');
     map.addLayer({
         id: 'heat-ring',
@@ -265,8 +268,8 @@ export function addHazardLayers(map) {
         source: 'unmatched-heat',
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 6, 12, 16],
-            'circle-color': ['match', ['get', 'strength'], 'likely', 'rgba(255,45,120,0.18)', 'persistent', 'rgba(139,149,161,0.12)', 'rgba(255,201,60,0.14)'],
-            'circle-stroke-color': ['match', ['get', 'strength'], 'likely', '#ff2d78', 'persistent', '#8b95a1', '#ffc93c'],
+            'circle-color': byLevel('rgba(139,149,161,0.12)', 'rgba(255,45,120,0.18)', 'rgba(255,201,60,0.14)', 'rgba(255,201,60,0.05)'),
+            'circle-stroke-color': byLevel('#8b95a1', '#ff2d78', '#ffc93c', 'rgba(255,201,60,0.55)'),
             'circle-stroke-width': 1.5,
         },
     }, 'perimeters-label');
@@ -274,7 +277,7 @@ export function addHazardLayers(map) {
     for (const group of HIDDEN_BY_DEFAULT) setGroupVisibility(map, group, false);
 }
 
-// Expanding ring on possible new fires so they catch the eye.
+// Expanding ring on Moderate and Elevated unconfirmed heat so it catches the eye.
 export function animateHeatPulse(map) {
     let last = 0;
     const tick = (t) => {

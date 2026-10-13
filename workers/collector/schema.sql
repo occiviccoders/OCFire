@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS tracks (
     incident_started TEXT,           -- start time the agency lists
     incident_seen TEXT,              -- when the incident first appeared in its feed (per the collector)
     incident_preexisting INTEGER,    -- 1 if the incident was already in the feed on the collector's first run
-    labeled_at TEXT
+    labeled_at TEXT,
+    land INTEGER                     -- NLCD 2021 land cover class at the first position
 );
 CREATE INDEX IF NOT EXISTS tracks_last_seen ON tracks (last_seen);
 CREATE INDEX IF NOT EXISTS tracks_status ON tracks (status);
@@ -76,7 +77,11 @@ CREATE TABLE IF NOT EXISTS snapshots (
     score INTEGER,
     level TEXT,
     reasons TEXT,                    -- JSON
-    rules_version INTEGER
+    rules_version INTEGER,
+    night INTEGER,                   -- 1 if any detection so far was on a night pass
+    rain_3d REAL,                    -- inches, today plus the previous 3 days (Open-Meteo)
+    thunder_3d INTEGER,              -- 1 if a thunderstorm weather code appeared in that window
+    dry_days INTEGER                 -- days since 0.1"+ of rain, capped at 14
 );
 CREATE INDEX IF NOT EXISTS snapshots_track ON snapshots (track_id);
 

@@ -11,7 +11,7 @@ const STATUS = {
     active: 'Watching',
     known_fire: 'On known fire',
 };
-const LEVEL = { high: 'Strong', moderate: 'Moderate', low: 'Weak' };
+const LEVEL = { high: 'Elevated', moderate: 'Moderate', low: 'Low' };
 const RESOLVED = new Set(['fire', 'not_reported', 'recurring']);
 const HOUR = 3600 * 1000;
 
@@ -104,8 +104,8 @@ function renderScorecard() {
     const fresh = state.tracks.filter((t) => t.status !== 'known_fire');
     const rows = [
         { label: 'Any new hotspot', test: () => true, knownAt: (t) => t.first_collected },
-        { label: 'Reached Moderate or Strong', test: isElevated, knownAt: (t) => t.moderate_known_at },
-        { label: 'Reached Strong', test: (t) => t.peak_level === 'high', knownAt: (t) => t.strong_known_at },
+        { label: 'Reached Moderate or Elevated', test: isElevated, knownAt: (t) => t.moderate_known_at },
+        { label: 'Reached Elevated', test: (t) => t.peak_level === 'high', knownAt: (t) => t.strong_known_at },
     ].map(({ label, test, knownAt }) => {
         const group = fresh.filter(test);
         const resolved = group.filter((t) => RESOLVED.has(t.status));
@@ -139,8 +139,8 @@ function renderScorecard() {
         </div>
         <ul class="lab-facts">
             <li><strong>${early.length} of ${timed.length}</strong> reported fires reached Moderate before the agency's listed start time.</li>
-            <li><strong>${missed.length} of ${fires.length}</strong> reported fires never got past Weak (misses worth studying).</li>
-            <li><strong>${largeFlagged.length} of ${large.length}</strong> reported fires that grew to 10+ acres reached Moderate or Strong.</li>
+            <li><strong>${missed.length} of ${fires.length}</strong> reported fires never got past Low (misses worth studying).</li>
+            <li><strong>${largeFlagged.length} of ${large.length}</strong> reported fires that grew to 10+ acres reached Moderate or Elevated.</li>
             <li class="lab-dim">Hit rate = share of resolved tracks that turned out to be a reported fire. Lead time compares when the
                 collector first saw the signal with the agency's start time; fires already listed before collection began are excluded.</li>
             ${resolvedCount < 30 ? '<li class="lab-dim">Still early: these numbers mean more once a few hundred tracks have resolved.</li>' : ''}
@@ -164,7 +164,7 @@ function renderDaily() {
         const seg = (k) => (d[k] ? `<span class="lab-bar__seg lab-bar__seg--${k}" style="height:${(100 * d[k]) / max}%"></span>` : '');
         const label = new Date(`${day}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' });
         return `
-            <div class="lab-bar" title="${label}: ${total} new · ${d.moderate} Moderate · ${d.high} Strong · ${d.fire} reported fire${d.fire === 1 ? '' : 's'}">
+            <div class="lab-bar" title="${label}: ${total} new · ${d.moderate} Moderate · ${d.high} Elevated · ${d.fire} reported fire${d.fire === 1 ? '' : 's'}">
                 <div class="lab-bar__stack">${seg('high')}${seg('moderate')}${seg('low')}</div>
                 ${d.fire ? `<span class="lab-bar__fire">${d.fire}</span>` : ''}
                 <span class="lab-bar__label">${label.replace(' ', '\u00a0')}</span>
@@ -173,9 +173,9 @@ function renderDaily() {
     $('#daily').innerHTML = `
         <div class="lab-bars">${bars.join('')}</div>
         <div class="lab-legend">
-            <span><i class="lab-bar__seg--high"></i>Strong</span>
+            <span><i class="lab-bar__seg--high"></i>Elevated</span>
             <span><i class="lab-bar__seg--moderate"></i>Moderate</span>
-            <span><i class="lab-bar__seg--low"></i>Weak</span>
+            <span><i class="lab-bar__seg--low"></i>Low</span>
             <span><b class="lab-bar__fire">n</b>became a reported fire</span>
         </div>`;
 }
@@ -233,7 +233,7 @@ function scoreChart(snapshots, track) {
         `<text class="lab-chart__tick" x="${x(t)}" y="${H - 6}" text-anchor="${['start', 'middle', 'end'][i]}">${shortDate(new Date(t).toISOString())}</text>`);
     return `
         <svg class="lab-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Signal score over time">
-            ${hline(5, 'Strong (5+)', 'lab-chart__strong')}
+            ${hline(5, 'Elevated (5+)', 'lab-chart__strong')}
             ${hline(3, 'Moderate (3+)', 'lab-chart__moderate')}
             ${hline(0, '0', 'lab-chart__zero')}
             ${reported ? `<line class="lab-chart__reported" x1="${x(reported)}" x2="${x(reported)}" y1="${PAD.t}" y2="${H - PAD.b}"/>
@@ -303,7 +303,7 @@ function timelineEvents(t, incident, history, snapshots, detections, summary) {
         });
     }
     if (t.first_moderate_at) events.push({ at: t.first_moderate_at, kind: 'model', title: 'Signal reached Moderate', detail: 'Using satellite data through this pass' });
-    if (t.first_strong_at) events.push({ at: t.first_strong_at, kind: 'model', title: 'Signal reached Strong', detail: 'Using satellite data through this pass' });
+    if (t.first_strong_at) events.push({ at: t.first_strong_at, kind: 'model', title: 'Signal reached Elevated', detail: 'Using satellite data through this pass' });
 
     const collected = detections.map((d) => d.collected_at).sort()[0];
     if (collected) events.push({ at: collected, kind: 'collector', title: 'Collector first saw this heat' });
@@ -413,7 +413,7 @@ async function showDetail(id) {
             <div><dt>Detections / passes</dt><dd>${t.detections} / ${t.passes}</dd></div>
             <div><dt>Max FRP</dt><dd>${num(t.max_frp, 1)} MW</dd></div>
             <div><dt>Moderate (pass / seen)</dt><dd>${shortDate(t.first_moderate_at)} / ${shortDate(summary.moderate_known_at)}</dd></div>
-            <div><dt>Strong (pass / seen)</dt><dd>${shortDate(t.first_strong_at)} / ${shortDate(summary.strong_known_at)}</dd></div>
+            <div><dt>Elevated (pass / seen)</dt><dd>${shortDate(t.first_strong_at)} / ${shortDate(summary.strong_known_at)}</dd></div>
             <div><dt>Reported as</dt><dd>${t.incident_name ? `${e(t.incident_name)} <span class="lab-dim">(${e(t.incident_source || '')})</span>` : t.known_at_start ? e(t.known_at_start) : '—'}</dd></div>
             <div><dt>Official discovery</dt><dd>${shortDate(incident?.started)}${incident?.preexisting ? ' <span class="lab-dim">(listed before collection began)</span>' : ''}</dd></div>
             <div><dt>Official record created</dt><dd>${shortDate(incident?.reported)}</dd></div>

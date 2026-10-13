@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { landcoverUrl } from './server/landcover.js';
 
 // Mirrors SERVICES in functions/api/perimeters/[source].js.
 const PERIMETER_SERVICES = {
@@ -46,6 +47,14 @@ export default defineConfig(({ mode }) => {
             target: 'https://media.chp.ca.gov',
             changeOrigin: true,
             rewrite: () => '/sa_xml/sa.xml',
+        },
+        '/api/landcover': {
+            target: 'https://www.mrlc.gov',
+            changeOrigin: true,
+            rewrite: (path) => {
+                const url = new URL(landcoverUrl(decodeURIComponent(path.replace(/^\/api\/landcover\//, ''))));
+                return url.pathname + url.search;
+            },
         },
     };
 

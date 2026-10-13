@@ -28,7 +28,7 @@ The [Hosting](#hosting) section walks through exactly how, and how to run it som
 | Feature | What you see |
 |---|---|
 | **Fires** | CAL FIRE incidents as callout cards (size, containment meter, wind at the fire), mapped perimeters with a glowing active edge, and earlier perimeters as growth rings. |
-| **Satellite heat** | NASA FIRMS detections from the last 24 h. Heat that isn't near any known fire is flagged as a *possible new fire*; heat that shows up every day (refineries, power plants) is labeled *persistent*. |
+| **Satellite heat** | NASA FIRMS detections from the last 24 h. Heat that isn't near any known fire is flagged as *unconfirmed heat* with a Low / Moderate / Elevated alert level; heat that shows up every day (refineries, power plants) is labeled *persistent*. |
 | **Fire weather** | NWS Red Flag Warnings and Fire Weather Watches, an animated statewide wind field, wind arrows, a Hot-Dry-Windy index layer, and a 72-hour timeline to scrub through the forecast. |
 | **Forecast panel** | 72-hour wind/humidity chart and air quality for Orange County and the state's known fire-wind corridors (Santa Ana, Sundowner, Diablo, North wind). |
 | **Context layers** | Smoke plumes (NOAA), Fire Hazard Severity Zones (CAL FIRE), and power shutoffs/outages (SCE, Cal OES). |
@@ -187,8 +187,10 @@ src/sass/                   Styles (abstracts + one partial per UI area)
 4. Rate each cluster: **likely** if it has at least two of three signals (3+ detections, seen by more
    than one satellite, any high-confidence detection), otherwise **possible**; or **persistent** if the
    spot was hot on ≥ 2 of the previous 5 days within 0.6 mi, which catches refinery flares and power plants. Persistent heat is drawn gray and left out of the list.
-5. Score each cluster's **fire signal** (`assess()`), as a points tally. The card lists what points toward a
-   fire and what points against (one detection, one satellite, calm weather), so a Weak rating explains itself:
+5. Score each cluster's **alert level** (`assess()`), as a points tally. The card lists what points toward a
+   fire and what points against (one detection, one satellite, calm weather), so a Low rating explains itself.
+   Land cover (`/api/landcover`, USGS NLCD 2021) and the past 14 days of daily rain and weather codes
+   (Open-Meteo) load per cluster after the first render (`siteFacts.js`) and rescore it:
 
    | Signal | Points |
    |---|---|
@@ -199,8 +201,14 @@ src/sass/                   Styles (abstracts + one partial per UI area)
    | 3+ detections · more than one satellite · high confidence · 20+ MW | +1 each |
    | Inside a Red Flag Warning · elevated or red-flag-level weather at the spot | +1 each |
    | Later satellite passes sit downwind of the first (≥ 0.3 mi, within 45° of the wind) | +2 |
+   | Any detection on a night pass | +1 |
+   | Wildland (forest, shrub, grass, wetland) | +1 |
+   | Cropland or pasture · bare ground · water | −1 |
+   | Thunderstorm weather code in the past 3 days (model, not observed lightning) | +2 |
+   | 0.25"+ of rain in the past 3 days | −1 |
 
-   5+ is **Strong**, 3–4 **Moderate**, otherwise **Weak**. It's a ranking aid, not a calibrated probability:
+   GOES detections count once per satellite and are left out of position and drift. 5+ is **Elevated**,
+   3–4 **Moderate**, otherwise **Low** (`RULES_VERSION` 3). It's a ranking aid, not a calibrated probability:
    there's no labeled history behind the weights yet, so the app never shows a percentage.
 
 These can still be agricultural or prescribed burns. They're leads, not confirmed fires.
