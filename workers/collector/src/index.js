@@ -579,6 +579,11 @@ export default {
     },
     async fetch(request, env) {
         const { pathname } = new URL(request.url);
+        // Manual "post now" (ignores posting hours; caps still apply). Needs the ADMIN_TOKEN secret.
+        if (request.method === 'POST' && pathname === '/api/social/run') {
+            if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
+            return json(await runSocial(env, Date.now(), { anyHour: true }));
+        }
         if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
         if (pathname === '/') {
             if ((request.headers.get('Accept') || '').includes('text/html')) return Response.redirect(`${env.SITE}/lab`, 302);

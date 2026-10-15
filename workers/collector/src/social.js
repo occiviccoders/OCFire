@@ -85,7 +85,7 @@ async function postToX(env, text) {
 
 // ---------- Run ----------
 
-export async function runSocial(env, now = Date.now()) {
+export async function runSocial(env, now = Date.now(), { anyHour = false } = {}) {
     const mode = env.SOCIAL_MODE || 'off';
     if (mode === 'off') return { mode };
     const db = env.DB;
@@ -117,7 +117,7 @@ export async function runSocial(env, now = Date.now()) {
     fresh.sort((a, b) => (b.i.acres || 0) - (a.i.acres || 0));
     updates.sort((a, b) => b.waited - a.waited || (b.i.acres || 0) - (a.i.acres || 0));
     const hour = pacificHour(now);
-    const inHours = hour >= POST_HOURS[0] && hour < POST_HOURS[1];
+    const inHours = anyHour || (hour >= POST_HOURS[0] && hour < POST_HOURS[1]);
     const queue = [...fresh.slice(0, NEW_PER_RUN), ...(inHours ? updates.slice(0, UPDATES_PER_RUN) : [])];
 
     const insert = db.prepare('INSERT INTO social_posts (incident_id, kind, created_at, status, post_id, text, acres, contained, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
