@@ -332,11 +332,16 @@ async function assignTracks(db, fresh, incidents, now, nowIso) {
             }
         }
         if (best == null) {
-            const known = incidents.find((i) => i.started <= d.acquired && distanceMiles(p, [i.lng, i.lat]) < INCIDENT_MI);
+            // Already-reported fire within range: start as known_fire and keep the incident id so we can
+            // still promote it to a full "fire" label (lead time, lab timeline) on a later pass.
+            const known = incidents
+                .filter((i) => i.started <= d.acquired && distanceMiles(p, [i.lng, i.lat]) < INCIDENT_MI)
+                .sort((a, b) => distanceMiles(p, [a.lng, a.lat]) - distanceMiles(p, [b.lng, b.lat]))[0];
             const row = await db.prepare(`
-                INSERT INTO tracks (first_seen, last_seen, first_collected, lat, lng, status, known_at_start)
-                VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6) RETURNING id`)
-                .bind(d.acquired, nowIso, d.lat, d.lng, known ? 'known_fire' : 'active', known?.name || null).first();
+                INSERT INTO tracks (first_seen, last_seen, first_collected, lat, lng, status, known_at_start, incident_id, incident_name, incident_source)
+                VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING id`)
+                .bind(d.acquired, nowIso, d.lat, d.lng, known ? 'known_fire' : 'active', known?.name || null,
+                    known?.id || null, known?.name || null, known?.source || null).first();
             best = row.id;
             members.set(best, []);
             created++;
@@ -460,23 +465,36 @@ async function snapshotTracks(db, trackIds, ctx, nowIso) {
 }
 
 // Match tracks to reported incidents; mark quiet, unmatched tracks as not reported (or recurring).
+// Includes known_fire tracks that never got an incident_id — that used to hide "heat first, name later"
+// cases like Henderson from ever linking in the lab.
 async function labelTracks(db, now, nowIso) {
     const { results: tracks } = await db.prepare(`
         SELECT t.*, (SELECT prior_days FROM snapshots s WHERE s.track_id = t.id ORDER BY s.id DESC LIMIT 1) AS prior_days,
                (SELECT past_days FROM snapshots s WHERE s.track_id = t.id ORDER BY s.id DESC LIMIT 1) AS past_days
-        FROM tracks t WHERE t.status IN ('active', 'not_reported', 'recurring') AND t.first_seen >= ?`).bind(iso(now - LABEL_LOOKBACK_MS)).all();
+        FROM tracks t
+        WHERE t.first_seen >= ?
+          AND (t.status IN ('active', 'not_reported', 'recurring')
+               OR (t.status = 'known_fire' AND t.incident_started IS NULL))`).bind(iso(now - LABEL_LOOKBACK_MS)).all();
     if (!tracks.length) return 0;
     const { results: incidents } = await db.prepare('SELECT * FROM incidents WHERE started >= ?').bind(iso(now - LABEL_LOOKBACK_MS - MATCH_BEFORE_MS)).all();
 
     const statements = [];
     for (const t of tracks) {
         const first = Date.parse(t.first_seen);
+        const center = [t.lng, t.lat];
+        // Closest fire in the time window, then the one whose start is nearest the first heat pass.
         const match = incidents
             .filter((i) => {
                 const started = Date.parse(i.started);
-                return started >= first - MATCH_BEFORE_MS && started <= first + MATCH_AFTER_MS && distanceMiles([t.lng, t.lat], [i.lng, i.lat]) <= MATCH_MI;
+                return started >= first - MATCH_BEFORE_MS && started <= first + MATCH_AFTER_MS
+                    && distanceMiles(center, [i.lng, i.lat]) <= MATCH_MI;
             })
-            .sort((a, b) => a.started.localeCompare(b.started))[0];
+            .sort((a, b) => {
+                const da = distanceMiles(center, [a.lng, a.lat]);
+                const dbMi = distanceMiles(center, [b.lng, b.lat]);
+                if (da !== dbMi) return da - dbMi;
+                return Math.abs(Date.parse(a.started) - first) - Math.abs(Date.parse(b.started) - first);
+            })[0];
         if (match) {
             statements.push(db.prepare(`
                 UPDATE tracks SET status = 'fire', incident_id = ?2, incident_name = ?3, incident_source = ?4,
