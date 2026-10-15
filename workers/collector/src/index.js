@@ -16,6 +16,9 @@ import { pointInGeometry } from '../../../src/js/geo.js';
 import { distanceMiles } from '../../../src/js/util.js';
 import { CA_BBOX } from '../../../src/js/config.js';
 import { fetchLandCover, fetchSiteFacts } from '../../../src/js/siteFacts.js';
+import { runSocial } from './social.js';
+
+const SOCIAL_CRON = '5,35 * * * *';
 
 const UA = 'California Fire Watch research collector (info@initialapps.com)';
 const SENSORS = ['VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'VIIRS_SNPP_NRT', 'MODIS_NRT', 'GOES_NRT'];
@@ -569,8 +572,10 @@ const API_HEADERS = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'publ
 const json = (data, status = 200) => Response.json(data, { status, headers: API_HEADERS });
 
 export default {
-    async scheduled(_event, env, ctx) {
-        ctx.waitUntil(collect(env).then((s) => console.log('collect', JSON.stringify(s))));
+    // Social posting runs on its own cron so it gets its own subrequest budget.
+    async scheduled(event, env, ctx) {
+        if (event.cron === SOCIAL_CRON) ctx.waitUntil(runSocial(env).then((s) => console.log('social', JSON.stringify(s))));
+        else ctx.waitUntil(collect(env).then((s) => console.log('collect', JSON.stringify(s))));
     },
     async fetch(request, env) {
         const { pathname } = new URL(request.url);
@@ -581,6 +586,10 @@ export default {
         }
         if (pathname === '/api/status') return json(await status(env.DB));
         if (pathname === '/api/tracks') return json((await env.DB.prepare(TRACKS_SQL).all()).results);
+        if (pathname === '/api/social') {
+            const { results } = await env.DB.prepare("SELECT incident_id, kind, created_at, status, post_id, text, error FROM social_posts WHERE status != 'skipped' ORDER BY id DESC LIMIT 50").all();
+            return json({ mode: env.SOCIAL_MODE || 'off', posts: results });
+        }
         const match = pathname.match(/^\/api\/tracks\/(\d+)$/);
         if (match) {
             const detail = await trackDetail(env.DB, Number(match[1]));

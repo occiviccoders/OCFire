@@ -2,12 +2,15 @@ name = "ocfire-collector"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
-# Every 15 minutes, whether or not anyone is on the site.
+# Collector every 15 minutes, whether or not anyone is on the site; social posting at :05 and :35.
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/15 * * * *", "5,35 * * * *"]
 
 [vars]
 SITE = "https://ocfire.pages.dev"
+# off | dry_run | live (see src/social.js)
+SOCIAL_MODE = "dry_run"
+SOCIAL_DAILY_CAP = "15"
 
 [[d1_databases]]
 binding = "DB"
