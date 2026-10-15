@@ -2,6 +2,7 @@ import { escapeHTML as e, formatAcres, formatDateTime, formatPercent, formatMile
 import { containmentColor, containmentStage, summarize } from './explain.js';
 import { compass, downwind } from './wind/fireWeather.js';
 import { FHSZ_MEANING } from './sources/fhsz.js';
+import { shareLinksHTML } from './share.js';
 
 function containmentBar(pct) {
     const width = pct == null ? 0 : Math.max(0, Math.min(100, pct));
@@ -42,7 +43,7 @@ function camerasHTML(cameras) {
         </div>`;
 }
 
-export function incidentPopup(p, windOutlook = null, cameras) {
+export function incidentPopup(p, windOutlook = null, cameras, coords = null) {
     const [sizeLine, stageLine, timeLine] = summarize(p);
     const stage = containmentStage(p.contained);
     return `
@@ -62,6 +63,7 @@ export function incidentPopup(p, windOutlook = null, cameras) {
             <p class="popup__summary">${e(stageLine)}</p>
             ${fireWindHTML(windOutlook)}
             ${camerasHTML(cameras)}
+            ${shareLinksHTML(p, coords)}
             <details class="popup__explain">
                 <summary>What does “contained” mean?</summary>
                 Containment is the share of the fire’s edge where crews have a finished control line — a dozer

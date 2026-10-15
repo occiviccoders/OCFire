@@ -681,6 +681,56 @@
     }
 }
 
+.share {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid $border;
+
+    &__label {
+        font-size: 1.05rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: $text-dim;
+    }
+
+    &__row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    &__btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 3.2rem;
+        height: 3.2rem;
+        border-radius: 0.6rem;
+        background: $panel-2;
+        color: $text;
+        border: 1px solid $border;
+        transition: background 0.15s, color 0.15s;
+
+        svg {
+            width: 1.6rem;
+            height: 1.6rem;
+        }
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        &--x:hover { color: #fff; }
+        &--facebook:hover { color: #1877f2; }
+        &--threads:hover { color: #fff; }
+        &--bluesky:hover { color: #1185fe; }
+        &--whatsapp:hover { color: #25d366; }
+    }
+}
+
 .popup__cams {
     margin: 0.8rem 0;
 
