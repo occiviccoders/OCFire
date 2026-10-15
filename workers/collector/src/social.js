@@ -1,6 +1,6 @@
-// Posts CAL FIRE-named fires to X: once when a new fire appears, then an update at most daily while it's
-// active and its size or containment has changed. Agency-reported incidents only; unconfirmed satellite
-// heat is never posted.
+// Posts CAL FIRE-named fires to X: once when a new fire appears, then about twice a day per open fire,
+// spread across daytime hours (one update per run, the fire waiting longest first). Agency-reported
+// incidents only; unconfirmed satellite heat is never posted.
 //
 // SOCIAL_MODE: "off" (default), "dry_run" (compose and log to social_posts without posting), or "live".
 // SOCIAL_DAILY_CAP: posts per rolling 24 hours (X's free tier allows only a handful a day).
@@ -8,12 +8,16 @@
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 const NEW_WINDOW_MS = 12 * HOUR; // announce a fire only if we first saw it this recently
-const UPDATE_EVERY_MS = 23 * HOUR; // just under a day, so daily updates don't drift later
+const UPDATE_EVERY_MS = 10 * HOUR; // ~twice a day per fire, within posting hours
+const POST_HOURS = [7, 21]; // updates only between 7 AM and 9 PM Pacific; new fires post any time
 const LOOKBACK_MS = 30 * DAY;
-const PER_RUN = 4;
+const NEW_PER_RUN = 3;
+const UPDATES_PER_RUN = 1;
 const X_TWEETS = 'https://api.x.com/2/tweets';
 
 const iso = (ms) => new Date(ms).toISOString();
+const pacific = (ms, opts) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', ...opts }).format(new Date(ms));
+const pacificHour = (ms) => Number(pacific(ms, { hour: 'numeric', hourCycle: 'h23' }));
 const acresText = (a) => (a == null ? 'size not yet reported' : `${Number(a).toLocaleString('en-US', { maximumFractionDigits: a < 10 ? 1 : 0 })} acres`);
 
 export const isNamedFire = (name) => /\b(fire|complex)$/i.test((name || '').trim());
@@ -28,19 +32,22 @@ export function mapLink(site, i) {
     return `${site}/?${params}`;
 }
 
-export function compose(kind, i, last, site) {
+export function compose(kind, i, last, site, now = Date.now()) {
     const tag = hashtag(i.name);
     const where = i.county ? `${i.county} County` : 'California';
+    const tags = [tag, i.county ? hashtag(`${i.county} County`) : null, '#CAwildfire'].filter(Boolean).join(' ');
     const contained = i.contained == null ? '' : `, ${Math.round(i.contained)}% contained`;
     const link = mapLink(site, i);
     if (kind === 'new') {
-        return `New fire reported: ${i.name}, ${where}. ${acresText(i.acres)}${contained}, per CAL FIRE.\n\nLive map with wind and smoke: ${link}\n\n${tag} #CAwildfire`;
+        return `New fire reported: ${i.name}, ${where}. ${acresText(i.acres)}${contained}, per CAL FIRE.\n\nLive map with wind and smoke: ${link}\n\n#NewFire ${tags}`;
     }
+    // The time keeps repeat updates on an unchanged fire from being rejected by X as duplicate posts.
+    const asOf = `as of ${pacific(now, { hour: 'numeric', minute: '2-digit' })}`;
     if (i.contained >= 100) {
-        return `${tag} is 100% contained at ${acresText(i.acres)}, per CAL FIRE (${where}).\n\nMap: ${link}`;
+        return `${i.name} (${where}) is 100% contained at ${acresText(i.acres)}, per CAL FIRE ${asOf}.\n\nMap: ${link}\n\n${tags}`;
     }
-    const grew = last?.acres != null && i.acres != null && i.acres !== last.acres ? ` (was ${acresText(last.acres).replace(' acres', '')})` : '';
-    return `${tag} update, ${where}: ${acresText(i.acres)}${grew}${contained}, per CAL FIRE.\n\nSee the latest on the map: ${link}\n\n#CAwildfire`;
+    const grew = last?.acres != null && i.acres != null && i.acres > last.acres ? ` Up from ${acresText(last.acres)}.` : '';
+    return `${i.name}, ${where}: ${acresText(i.acres)}${contained} ${asOf}, per CAL FIRE.${grew}\n\nLive map with wind and smoke: ${link}\n\n${tags}`;
 }
 
 // ---------- X (OAuth 1.0a user context) ----------
@@ -86,35 +93,42 @@ export async function runSocial(env, now = Date.now()) {
 
     const [{ results: incidents }, { results: history }, used] = await Promise.all([
         db.prepare("SELECT * FROM incidents WHERE source = 'calfire' AND active = 1 AND started >= ?").bind(iso(now - LOOKBACK_MS)).all(),
-        db.prepare("SELECT incident_id, created_at, acres, contained FROM social_posts WHERE status != 'error' AND created_at >= ? ORDER BY created_at").bind(iso(now - LOOKBACK_MS)).all(),
+        db.prepare("SELECT incident_id, kind, created_at, acres, contained FROM social_posts WHERE status != 'error' AND created_at >= ? ORDER BY created_at").bind(iso(now - LOOKBACK_MS)).all(),
         db.prepare("SELECT COUNT(*) AS n FROM social_posts WHERE status IN ('posted', 'dry_run', 'error') AND created_at >= ?").bind(iso(now - DAY)).first(),
     ]);
     const last = new Map(history.map((p) => [p.incident_id, p]));
 
-    const queue = [];
+    const fresh = [];
+    const updates = [];
     const seeds = [];
     for (const i of incidents) {
         if (!isNamedFire(i.name) || i.lat == null) continue;
         const prev = last.get(i.id);
         if (!prev) {
-            const fresh = now - Date.parse(i.first_seen) < NEW_WINDOW_MS && (i.contained ?? 0) < 100;
-            if (fresh) queue.push({ kind: 'new', i });
+            if (now - Date.parse(i.first_seen) < NEW_WINDOW_MS && (i.contained ?? 0) < 100) fresh.push({ kind: 'new', i });
             else seeds.push(i);
-        } else if (now - Date.parse(prev.created_at) >= UPDATE_EVERY_MS && (i.acres !== prev.acres || i.contained !== prev.contained)) {
-            queue.push({ kind: 'update', i, prev });
+            continue;
         }
+        // Once we've posted it at 100% contained, the fire is done.
+        if (prev.contained >= 100 && (prev.kind !== 'seed' || i.contained >= 100)) continue;
+        const due = prev.kind === 'seed' || now - Date.parse(prev.created_at) >= UPDATE_EVERY_MS;
+        if (due) updates.push({ kind: 'update', i, prev, waited: prev.kind === 'seed' ? Infinity : now - Date.parse(prev.created_at) });
     }
-    queue.sort((a, b) => (a.kind === b.kind ? (b.i.acres || 0) - (a.i.acres || 0) : a.kind === 'new' ? -1 : 1));
+    fresh.sort((a, b) => (b.i.acres || 0) - (a.i.acres || 0));
+    updates.sort((a, b) => b.waited - a.waited || (b.i.acres || 0) - (a.i.acres || 0));
+    const hour = pacificHour(now);
+    const inHours = hour >= POST_HOURS[0] && hour < POST_HOURS[1];
+    const queue = [...fresh.slice(0, NEW_PER_RUN), ...(inHours ? updates.slice(0, UPDATES_PER_RUN) : [])];
 
     const insert = db.prepare('INSERT INTO social_posts (incident_id, kind, created_at, status, post_id, text, acres, contained, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const nowIso = iso(now);
     // Fires already burning when we started watching: remember them without announcing.
     if (seeds.length) await db.batch(seeds.map((i) => insert.bind(i.id, 'seed', nowIso, 'skipped', null, null, i.acres, i.contained, null)));
 
-    const budget = Math.max(0, Math.min(PER_RUN, cap - used.n));
+    const budget = Math.max(0, cap - used.n);
     const results = [];
     for (const { kind, i, prev } of queue.slice(0, budget)) {
-        const text = compose(kind, i, prev, env.SITE);
+        const text = compose(kind, i, prev, env.SITE, now);
         let status = 'dry_run';
         let postId = null;
         let error = null;
@@ -130,5 +144,5 @@ export async function runSocial(env, now = Date.now()) {
         await insert.bind(i.id, kind, nowIso, status, postId, text, i.acres, i.contained, error).run();
         results.push({ kind, name: i.name, status, error });
     }
-    return { mode, queued: queue.length, seeded: seeds.length, budget, results };
+    return { mode, new: fresh.length, due: updates.length, seeded: seeds.length, budget, results };
 }
