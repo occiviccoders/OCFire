@@ -7,6 +7,7 @@ import { escapeHTML as e, distanceMiles, formatMiles } from '../util.js';
 import { compass, fireWindOutlook } from '../wind/fireWeather.js';
 import { placeName, searchPlaces } from '../evac/router.js';
 import { CHECKLISTS } from './checklists.js';
+import { mountCauses } from './causes.js';
 
 const PLACE_KEY = 'ocfire.place.v1';
 const DONE_KEY = 'ocfire.ready.v1';
@@ -197,6 +198,8 @@ export function createReadiness(map, getContext, { onOpen = () => {}, onPlanFrom
             map.getCanvas().style.cursor = '';
         }
     }
+
+    mountCauses($('ready-causes'));
 
     // --- events (delegated: the body is re-rendered per tab) ---
     $('ready-open').addEventListener('click', () => setOpen(true));

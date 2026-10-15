@@ -141,7 +141,8 @@ wrangler.toml               Cloudflare Pages config (build output = dist)
 functions/api/              Cloudflare Pages Functions (production proxies), one file per source
 server/proxy.js             Shared proxy: GET only, edge cache, User-Agent, error handling
 scripts/build-baseline.mjs  Rebuilds public/hotspot-baseline.json (one year of satellite heat per ~1 km cell)
-public/                     Static files copied as-is into the build (the hotspot baseline)
+scripts/build-fire-causes.mjs  Rebuilds public/fire-causes.json (fires and acres per year and cause, CAL FIRE FRAP)
+public/                     Static files copied as-is into the build (hotspot baseline, fire causes)
 workers/collector/          Scheduled Worker + D1 schema that logs hotspot tracks for model research
 src/js/
   main.js                   Orchestrator: state, refresh loops, map setup, click handling
@@ -323,6 +324,7 @@ progress is saved in `localStorage`.
 | Fire perimeters | CAL FIRE FIRIS + NIFC WFIGS (ArcGIS) | `/api/perimeters/{firis,wfigs}` | Edge 2 min, client 2 min |
 | Satellite hotspots | NASA FIRMS (VIIRS ×3 + MODIS + GOES-18/19 via `GOES_NRT`) | `/api/firms` (key added server-side) | Edge 5 min, client 2 min; 5-day history client 3 h |
 | Hotspot baseline | Static file built from NASA FIRMS | `/hotspot-baseline.json` | Client 24 h; rebuilt monthly by script |
+| Wildfire causes (Get ready chart) | Static file built from CAL FIRE FRAP historical perimeters | `/fire-causes.json` | Rebuilt yearly (`npm run causes`) after FRAP's spring release |
 | Red Flag Warnings / Watches | NWS | `/api/nws` | Edge 2 min (zone outlines 1 day), client 2 min |
 | Smoke plumes | NOAA HMS | `/api/hms` | Edge 10 min, client 10 min |
 | Road closures / crashes | CHP | `/api/chp` | Edge 1 min, client 2 min |

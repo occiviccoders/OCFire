@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "baseline": "node scripts/build-baseline.mjs"
+    "baseline": "node scripts/build-baseline.mjs",
+    "causes": "node scripts/build-fire-causes.mjs"
   },
   "repository": {
     "type": "git",

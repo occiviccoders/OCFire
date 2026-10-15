@@ -354,6 +354,79 @@
     &:hover { filter: brightness(1.1); }
 }
 
+.causes {
+    background: $panel-2;
+    border-radius: $radius;
+    padding: 0.8rem 1rem;
+
+    summary {
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 1.3rem;
+    }
+
+    &__body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+    }
+
+    &__controls {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.6rem;
+
+        span {
+            display: flex;
+            gap: 0.4rem;
+        }
+    }
+
+    &__chart {
+        width: 100%;
+        height: auto;
+    }
+
+    &__bar {
+        fill: rgba($fire-warm, 0.55);
+
+        &--top {
+            fill: $fire-warm;
+        }
+    }
+
+    &__cum {
+        fill: none;
+        stroke: $text;
+        stroke-width: 1.5;
+    }
+
+    &__cum-pt {
+        fill: $text;
+    }
+
+    &__eighty {
+        stroke: rgba($text, 0.25);
+        stroke-dasharray: 3 3;
+    }
+
+    &__axis,
+    &__xlabel {
+        fill: $text-dim;
+        font-size: 10px;
+    }
+
+    &__xlabel {
+        fill: $text;
+    }
+
+    &__source {
+        font-size: 1.05rem;
+        color: $text-dim;
+    }
+}
+
 .ready {
     &__progress-row {
         display: flex;
