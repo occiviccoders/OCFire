@@ -7,7 +7,7 @@ compatibility_date = "2026-10-01"
 crons = ["*/15 * * * *", "5,35 * * * *"]
 
 [vars]
-SITE = "https://ocfire.pages.dev"
+SITE = "https://firewatch.occiviccoders.com"
 # off | dry_run | live (see src/social.js)
 SOCIAL_MODE = "dry_run"
 SOCIAL_DAILY_CAP = "15"

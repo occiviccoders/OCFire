@@ -255,7 +255,7 @@ Data lives in the D1 database `ocfire-research`. The Worker also serves a small 
 
 #### Model lab (`lab.html`, `src/js/lab.js`)
 
-A separate research page at [/lab](https://ocfire.pages.dev/lab), linked quietly from the sidebar footer
+A separate research page at [/lab](https://firewatch.occiviccoders.com/lab), linked quietly from the sidebar footer
 and not indexed. It shows collector health, a scorecard (hit rate and median lead time for tracks that
 reached Moderate or Strong, plus misses), new hotspots per day by peak signal, a filterable track table
 with CSV download, and a per-track view: a replay map (`labReplay.js`, loaded on demand) with a time
