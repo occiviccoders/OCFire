@@ -184,13 +184,13 @@ function renderSummary() {
     const satSoon = named.filter((r) => r.satLead > 1);
     const usSoon = named.filter((r) => r.ourLead > 1);
     const nameFirst = named.filter((r) => r.satLead <= 1);
-    const stat = (n, d, label, note) => `
-        <div class="lab-stat"><b>${n} / ${d || 0}</b><span>${label}</span>${note ? `<em>${note}</em>` : ''}</div>`;
+    const stat = (n, d, label, meaning, range) => `
+        <div class="lab-stat"><b>${n} / ${d || 0}</b><span>${label}</span><em>${meaning}${range ? ` · ${range}` : ''}</em></div>`;
     $('#timing').innerHTML = `
         <div class="lab-stats">
-            ${stat(satSoon.length, named.length, 'Satellite sooner', rangePhrase(satSoon.map((r) => r.satLead)))}
-            ${stat(usSoon.length, named.length, 'Fire Watch sooner', rangePhrase(usSoon.map((r) => r.ourLead)))}
-            ${stat(nameFirst.length, named.length, 'Named elsewhere first', 'we didn’t have the heat yet')}
+            ${stat(satSoon.length, named.length, 'Satellite sooner', 'if the data arrived immediately', rangePhrase(satSoon.map((r) => r.satLead)))}
+            ${stat(usSoon.length, named.length, 'Fire Watch sooner', 'caught it even with the delay', rangePhrase(usSoon.map((r) => r.ourLead)))}
+            ${stat(nameFirst.length, named.length, 'Named elsewhere', 'we didn’t have the heat yet')}
         </div>`;
 }
 
