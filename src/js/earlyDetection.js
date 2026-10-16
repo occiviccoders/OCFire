@@ -12,7 +12,7 @@ const PERIMETER_PAD_DEG = 0.03;
 // Hot on this many of the previous five days at the same spot = a fixed heat source, not a new fire.
 // Refinery flares are intermittent, so two days is enough.
 export const PERSISTENT_DAYS = 2;
-const PERSISTENT_MI = 0.6;
+export const PERSISTENT_MI = 0.6;
 
 // A padded bounding box rather than the exact outline: detections ring the edge of a growing fire.
 function nearPerimeter([x, y], boxes) {

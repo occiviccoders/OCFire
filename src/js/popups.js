@@ -43,6 +43,12 @@ function camerasHTML(cameras) {
         </div>`;
 }
 
+function labLink(p, coords) {
+    if (!coords || !/\b(fire|complex)$/i.test((p.name || '').trim())) return '';
+    const [lng, lat] = coords;
+    return ` · <a class="popup__lab" href="/lab?near=${lat.toFixed(4)},${lng.toFixed(4)}">Firewatch Lab</a>`;
+}
+
 export function incidentPopup(p, windOutlook = null, cameras, coords = null) {
     const [sizeLine, stageLine, timeLine] = summarize(p);
     const stage = containmentStage(p.contained);
@@ -70,7 +76,7 @@ export function incidentPopup(p, windOutlook = null, cameras, coords = null) {
                 or hand line, or a natural barrier — that they expect to hold. It isn’t how much has been put out:
                 a fully contained fire can keep burning inside its lines.
             </details>
-            <p class="popup__meta">${e(timeLine)}${p.adminUnit ? `<br>${e(p.adminUnit)}` : ''}</p>
+            <p class="popup__meta">${e(timeLine)}${p.adminUnit ? `<br>${e(p.adminUnit)}` : ''}${labLink(p, coords)}</p>
             ${p.url ? `<a class="popup__link" href="${e(p.url)}" target="_blank" rel="noopener">CAL FIRE incident page →</a>` : ''}
         </div>`;
 }

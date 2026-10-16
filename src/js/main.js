@@ -14,7 +14,7 @@ import { fetchSmoke } from './sources/smoke.js';
 import { FHSZ_MIN_ZOOM, fetchZonesInView } from './sources/fhsz.js';
 import { fetchPower } from './sources/power.js';
 import { camerasNear, loadCameras } from './sources/cameras.js';
-import { findUnmatchedHeat, INCIDENT_MI, RECENT_HOURS } from './earlyDetection.js';
+import { findUnmatchedHeat, INCIDENT_MI, PERSISTENT_MI, RECENT_HOURS } from './earlyDetection.js';
 import { fetchReportedIncidents } from './sources/reportedIncidents.js';
 import { createIncidentMarkers } from './incidentMarkers.js';
 import { closeSheet, createMapCard, sheetOverlap } from './mapCard.js';
@@ -125,6 +125,39 @@ function incidentCardHTML(feature) {
     return incidentPopup(feature.properties, outlook, camerasNear(feature.geometry.coordinates), feature.geometry.coordinates);
 }
 
+// A lab link lands on heat that may only exist in the national report, which has no marker of its own.
+let linkedFireOpened = false;
+function openLinkedFire() {
+    if (!focus?.label || linkedFireOpened) return;
+    linkedFireOpened = true;
+    const key = normalizeName(focus.label);
+    const calfire = state.incidents.features.find((f) => normalizeName(f.properties.name) === key);
+    if (calfire) {
+        selectIncident(calfire.properties.id, { fly: false });
+        return;
+    }
+    const reported = (state.heatContext.reported?.features || [])
+        .filter((f) => normalizeName(f.properties.name) === key)
+        .sort((a, b) => distanceMiles(focus.coords, a.geometry.coordinates) - distanceMiles(focus.coords, b.geometry.coordinates));
+    const hit = reported[0]?.properties || {};
+    const feature = {
+        geometry: { type: 'Point', coordinates: focus.coords },
+        properties: {
+            name: focus.label,
+            acres: hit.acres ?? null,
+            contained: hit.contained ?? null,
+            county: hit.county || '',
+            started: hit.discovered || null,
+            source: 'NIFC',
+            type: 'Wildfire',
+            adminUnit: 'National interagency report',
+            distance: distanceMiles(focus.coords),
+        },
+    };
+    popup.remove();
+    incidentCard.setLngLat(focus.coords).setHTML(incidentCardHTML(feature)).addTo(map, { pan: false });
+}
+
 function selectHeat(id) {
     const feature = state.unmatchedHeat.features.find((f) => f.properties.id === id);
     if (!feature) return;
@@ -189,7 +222,32 @@ function updateUnmatchedHeat({ loadFacts = true } = {}) {
         siteAt: (coords) => siteFacts.get(siteKey(coords))?.facts ?? null,
     });
     map.getSource('unmatched-heat').setData(state.unmatchedHeat);
+    tagPersistentHotspots();
     if (loadFacts) loadSiteFacts(state.unmatchedHeat.features.filter((f) => f.properties.strength !== 'persistent'));
+}
+
+// Detections sitting on a fixed source move to the persistent layer so Hotspots can stay on without them.
+function tagPersistentHotspots() {
+    const centers = state.unmatchedHeat.features
+        .filter((f) => f.properties.strength === 'persistent')
+        .map((f) => ({ id: f.properties.id, coords: f.geometry.coordinates }));
+    let changed = false;
+    for (const f of state.hotspots.features) {
+        const hit = centers.find((c) => distanceMiles(f.geometry.coordinates, c.coords) < PERSISTENT_MI);
+        const id = hit?.id || '';
+        if ((f.properties.persistentId || '') !== id) {
+            f.properties.persistent = !!hit;
+            f.properties.persistentId = id;
+            changed = true;
+        }
+    }
+    if (changed) map.getSource('hotspots').setData(state.hotspots);
+}
+
+function persistentPopup(feature) {
+    const heat = state.unmatchedHeat.features.find((f) => f.properties.id === feature.properties.persistentId);
+    if (!heat) return null;
+    return heatPopup(heat.properties, camerasNear(heat.geometry.coordinates), heat.geometry.coordinates);
 }
 
 function setSelection(id) {
@@ -281,6 +339,7 @@ async function runRefresh() {
     renderAll();
     planner.refresh();
     readiness.refresh();
+    openLinkedFire();
 
     const failed = settled.filter((r) => r.status === 'rejected');
     failed.forEach((r) => console.warn('[ocfire] source failed:', r.reason));
@@ -404,6 +463,9 @@ function setOverlay(name, on) {
 
 function wireInteractions() {
     const clickTargets = [
+        ['heat-persistent', persistentPopup],
+        ['persistent-core', persistentPopup],
+        ['persistent-goes', persistentPopup],
         ['heat-ring', (f) => heatPopup(f.properties, camerasNear(f.geometry.coordinates), f.geometry.coordinates)],
         ['hotspots-core', (f) => hotspotPopup(f.properties, hotspotContext(f.geometry.coordinates, f.properties), f.geometry.coordinates)],
         ['hotspots-goes', (f) => hotspotPopup(f.properties, hotspotContext(f.geometry.coordinates, f.properties), f.geometry.coordinates)],
@@ -451,7 +513,11 @@ function wireControls() {
             const group = input.dataset.layerToggle;
             if (group === 'incidents') incidentMarkers.setVisible(input.checked);
             else if (group in state.overlays) setOverlay(group, input.checked);
-            else setGroupVisibility(map, group, input.checked);
+            else {
+                setGroupVisibility(map, group, input.checked);
+                const legend = document.querySelector(`.legend__${group}`);
+                if (legend) legend.hidden = !input.checked;
+            }
         });
     });
     document.querySelectorAll('[data-wind-toggle]').forEach((input) => {
@@ -484,10 +550,13 @@ function wireControls() {
     document.getElementById('recenter').addEventListener('click', () => map.flyTo({ center: OC_CENTER, zoom: INITIAL_ZOOM, duration: 1000 }));
 
     if (!hotspotsEnabled) {
-        const input = document.querySelector('[data-layer-toggle="hotspots"]');
-        input.checked = false;
-        input.disabled = true;
-        input.closest('label').title = 'Set FIRMS_MAP_KEY in .env.local to enable';
+        for (const name of ['hotspots', 'persistent']) {
+            const input = document.querySelector(`[data-layer-toggle="${name}"]`);
+            input.checked = false;
+            input.disabled = true;
+            input.closest('label').title = 'Set FIRMS_MAP_KEY in .env.local to enable';
+            setGroupVisibility(map, name, false);
+        }
     }
 }
 
@@ -528,7 +597,6 @@ map.on('load', () => {
     }
     wireInteractions();
     wireControls();
-    if (!hotspotsEnabled) setGroupVisibility(map, 'hotspots', false);
     whileVisible(refresh, REFRESH_MS);
     whileVisible(refreshWind, WIND_REFRESH_MS);
     map.on('moveend', () => {

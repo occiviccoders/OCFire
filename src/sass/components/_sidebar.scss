@@ -402,6 +402,7 @@
         &--perimeter { background: rgba($fire-hot, 0.35); border: 1.5px solid $fire-hot; box-shadow: 0 0 0.6rem $fire-hot; }
         &--incident { height: 0.8rem; background: linear-gradient(90deg, $fire-warm 65%, rgba(255, 255, 255, 0.15) 65%); border: 1px solid rgba(255, 255, 255, 0.6); }
         &--hotspot { border-radius: 50%; width: 0.8rem; height: 0.8rem; background: $fire-near; box-shadow: 0 0 0.6rem #ff5a1f; }
+        &--persistent { border-radius: 50%; width: 0.8rem; height: 0.8rem; background: #c5ced6; border: 1.5px solid #8b95a1; }
         &--redflag { border: 1.5px dashed $redflag; background: rgba($redflag, 0.1); }
         &--sat { background: linear-gradient(135deg, #3a5a40, #8a7d5b); }
         &--smoke { background: linear-gradient(90deg, rgba(190, 180, 165, 0.25), rgba(190, 180, 165, 0.7)); }

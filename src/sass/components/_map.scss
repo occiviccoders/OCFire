@@ -134,6 +134,14 @@
         margin-top: 0.4rem;
     }
 
+    &__dot--persistent {
+        width: 0.8rem;
+        height: 0.8rem;
+        border-radius: 50%;
+        background: #c5ced6;
+        border: 1.5px solid #8b95a1;
+    }
+
     &__dot--heat {
         width: 1rem;
         height: 1rem;
@@ -545,6 +553,18 @@
         font-size: 1.15rem;
         color: $text-dim;
         line-height: 1.4;
+    }
+
+    &__lab {
+        color: $fire-warm;
+        font-size: inherit;
+        text-decoration: none;
+        letter-spacing: 0.04em;
+
+        &:hover {
+            color: $fire-hot;
+            text-decoration: underline;
+        }
     }
 
     &__unusual {

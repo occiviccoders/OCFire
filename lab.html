@@ -82,11 +82,20 @@
                             <option value="predicted">Predicted fires only</option>
                             <option value="named">Named fires only</option>
                             <option value="open">No name yet</option>
+                            <optgroup label="From the counts above">
+                                <option value="became">Became a named fire</option>
+                                <option value="still">Still burning, no name yet</option>
+                                <option value="away">Went away on its own</option>
+                                <option value="missed">We failed to predict</option>
+                                <option value="sat">Satellite sooner</option>
+                                <option value="us">Fire Watch sooner</option>
+                                <option value="elsewhere">Named elsewhere</option>
+                            </optgroup>
                         </select>
                         <button id="download" class="lab-btn">Download CSV</button>
                     </div>
                 </div>
-                <p class="lab-card__hint">Names open the live map. Green means sooner than the official name; red means later. Click a row for the timeline and score.</p>
+                <p class="lab-card__hint">Click a count above to list just those fires. Names open the live map. Green means sooner than the official name; red means later. Click a row for the timeline and score.</p>
                 <div class="lab-table-wrap lab-table-wrap--tall">
                     <table class="lab-table" id="tracks">
                         <thead>

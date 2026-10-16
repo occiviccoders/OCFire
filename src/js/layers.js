@@ -21,6 +21,7 @@ export const LAYER_GROUPS = {
         'perimeters-active-edge', 'perimeters-line', 'perimeters-selected', 'perimeters-label',
     ],
     hotspots: ['hotspots-goes', 'hotspots-glow', 'hotspots-core', 'heat-pulse', 'heat-ring'],
+    persistent: ['persistent-goes', 'persistent-glow', 'persistent-core', 'heat-persistent'],
     fireWeather: ['fireweather-fill', 'fireweather-line'],
     smoke: ['smoke-fill', 'smoke-line'],
     fhsz: ['fhsz-fill', 'fhsz-line'],
@@ -162,7 +163,7 @@ export function addFireLayers(map) {
         id: 'hotspots-goes',
         type: 'circle',
         source: 'hotspots',
-        filter: ['==', ['get', 'goes'], true],
+        filter: ['all', ['==', ['get', 'goes'], true], ['!=', ['get', 'persistent'], true]],
         paint: {
             'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 2.5, 10, 8, 14, 128],
             'circle-color': '#ffb347',
@@ -176,7 +177,7 @@ export function addFireLayers(map) {
         id: 'hotspots-glow',
         type: 'circle',
         source: 'hotspots',
-        filter: ['!=', ['get', 'goes'], true],
+        filter: ['all', ['!=', ['get', 'goes'], true], ['!=', ['get', 'persistent'], true]],
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4, 12, 16],
             'circle-color': '#ff5a1f',
@@ -188,10 +189,49 @@ export function addFireLayers(map) {
         id: 'hotspots-core',
         type: 'circle',
         source: 'hotspots',
-        filter: ['!=', ['get', 'goes'], true],
+        filter: ['all', ['!=', ['get', 'goes'], true], ['!=', ['get', 'persistent'], true]],
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2, 12, 4.5],
             'circle-color': ['interpolate', ['linear'], ['get', 'frp'], 0, '#ffe08a', 10, '#ff9a3c', 50, '#ff2a1a'],
+        },
+    });
+
+    // Known fixed sources (flares, plants, landfills), drawn gray and toggled separately from hotspots.
+    const persistentPoint = ['all', ['!=', ['get', 'goes'], true], ['==', ['get', 'persistent'], true]];
+    map.addLayer({
+        id: 'persistent-goes',
+        type: 'circle',
+        source: 'hotspots',
+        filter: ['all', ['==', ['get', 'goes'], true], ['==', ['get', 'persistent'], true]],
+        paint: {
+            'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 5, 2.5, 10, 8, 14, 128],
+            'circle-color': '#8b95a1',
+            'circle-opacity': 0.16,
+            'circle-stroke-color': '#8b95a1',
+            'circle-stroke-width': 1,
+            'circle-stroke-opacity': 0.7,
+        },
+    });
+    map.addLayer({
+        id: 'persistent-glow',
+        type: 'circle',
+        source: 'hotspots',
+        filter: persistentPoint,
+        paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 4, 12, 16],
+            'circle-color': '#8b95a1',
+            'circle-blur': 1,
+            'circle-opacity': 0.35,
+        },
+    });
+    map.addLayer({
+        id: 'persistent-core',
+        type: 'circle',
+        source: 'hotspots',
+        filter: persistentPoint,
+        paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 2, 12, 4.5],
+            'circle-color': '#c5ced6',
         },
     });
 
@@ -247,8 +287,7 @@ export function addHazardLayers(map) {
 
     // Unconfirmed heat: a ring around heat that no known fire explains, colored by alert level.
     // Only Moderate and Elevated pulse.
-    const byLevel = (persistent, high, moderate, low) =>
-        ['case', ['==', ['get', 'strength'], 'persistent'], persistent, ['match', ['get', 'unusual'], 'high', high, 'moderate', moderate, low]];
+    const byLevel = (high, moderate, low) => ['match', ['get', 'unusual'], 'high', high, 'moderate', moderate, low];
     map.addLayer({
         id: 'heat-pulse',
         type: 'circle',
@@ -268,8 +307,21 @@ export function addHazardLayers(map) {
         source: 'unmatched-heat',
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 6, 12, 16],
-            'circle-color': byLevel('rgba(139,149,161,0.12)', 'rgba(255,45,120,0.18)', 'rgba(255,201,60,0.14)', 'rgba(255,201,60,0.05)'),
-            'circle-stroke-color': byLevel('#8b95a1', '#ff2d78', '#ffc93c', 'rgba(255,201,60,0.55)'),
+            'circle-color': byLevel('rgba(255,45,120,0.18)', 'rgba(255,201,60,0.14)', 'rgba(255,201,60,0.05)'),
+            'circle-stroke-color': byLevel('#ff2d78', '#ffc93c', 'rgba(255,201,60,0.55)'),
+            'circle-stroke-width': 1.5,
+        },
+        filter: ['!=', ['get', 'strength'], 'persistent'],
+    }, 'perimeters-label');
+    map.addLayer({
+        id: 'heat-persistent',
+        type: 'circle',
+        source: 'unmatched-heat',
+        filter: ['==', ['get', 'strength'], 'persistent'],
+        paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 6, 12, 16],
+            'circle-color': 'rgba(139,149,161,0.12)',
+            'circle-stroke-color': '#8b95a1',
             'circle-stroke-width': 1.5,
         },
     }, 'perimeters-label');

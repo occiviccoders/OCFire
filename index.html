@@ -68,6 +68,7 @@
                         <label class="toggle"><input type="checkbox" data-layer-toggle="perimeters" checked><span class="toggle__swatch toggle__swatch--perimeter"></span>Fire perimeters<i class="dot" data-source-status="perimeters"></i></label>
                         <label class="toggle"><input type="checkbox" data-layer-toggle="incidents" checked><span class="toggle__swatch toggle__swatch--incident"></span>Incidents<i class="dot" data-source-status="incidents"></i></label>
                         <label class="toggle" title="NASA FIRMS thermal detections, last 24h. Dashed rings = heat not matched to any known fire."><input type="checkbox" data-layer-toggle="hotspots" checked><span class="toggle__swatch toggle__swatch--hotspot"></span>Hotspots<i class="dot" data-source-status="hotspots"></i></label>
+                        <label class="toggle" title="Heat at the same spot on 2 or more of the past 5 days: refinery flares, power plants, landfills. Not a new fire."><input type="checkbox" data-layer-toggle="persistent" checked><span class="toggle__swatch toggle__swatch--persistent"></span>Persistent heat</label>
                         <label class="toggle" title="NWS Red Flag Warnings and Fire Weather Watches"><input type="checkbox" data-layer-toggle="fireWeather" checked><span class="toggle__swatch toggle__swatch--redflag"></span>Red flag zones<i class="dot" data-source-status="fireWeather"></i></label>
                         <label class="toggle"><input type="checkbox" data-wind-toggle="flow" checked><span class="toggle__swatch toggle__swatch--wind"></span>Wind flow<i class="dot" data-source-status="wind"></i></label>
                         <label class="toggle"><input type="checkbox" data-wind-toggle="arrows"><span class="toggle__swatch toggle__swatch--arrows" aria-hidden="true">➤</span>Wind arrows</label>
@@ -197,6 +198,7 @@
                     <div class="legend__row"><span class="legend__dot legend__dot--hotspot"></span>Satellite hotspot</div>
                     <div class="legend__row"><span class="legend__dot legend__dot--goes"></span>GOES heat (fast, ~2 km area)</div>
                     <div class="legend__row"><span class="legend__dot legend__dot--heat"></span>Unconfirmed heat · pink = Elevated, yellow = Moderate alert</div>
+                    <div class="legend__row legend__persistent"><span class="legend__dot legend__dot--persistent"></span>Persistent heat · flare, plant, or landfill</div>
                     <div class="legend__row"><span class="legend__dash legend__dash--redflag"></span>Red flag warning</div>
                     <div class="legend__row"><span class="legend__dash legend__dash--watch"></span>Fire weather watch</div>
                     <div class="legend__smoke" hidden>

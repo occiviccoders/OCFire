@@ -48,9 +48,13 @@ export function summarize(p) {
     const where = p.location ? ` near ${p.location.replace(/\s*,\s*$/, '')}` : p.county ? ` in ${p.county} County` : '';
     const comparison = sizeComparison(p.acres);
     const stage = containmentStage(p.contained);
+    const who = p.source || 'CAL FIRE';
+    const bits = [];
+    if (p.started) bits.push(`It started ${timeAgo(p.started)}`);
+    if (p.updated) bits.push(`${who} last updated it ${timeAgo(p.updated)}`);
     return [
         `${name} has burned ${formatAcres(p.acres).replace(' ac', ' acres')}${comparison ? ` (${comparison})` : ''}${where}, ${formatMiles(p.distance)} from central OC.`,
         `${stage.label}${p.contained != null ? ` at ${Math.round(p.contained)}%` : ''}: ${stage.detail}`,
-        `It started ${timeAgo(p.started)}; CAL FIRE last updated it ${timeAgo(p.updated)}.`,
+        bits.length ? `${bits.join('; ')}.` : '',
     ];
 }

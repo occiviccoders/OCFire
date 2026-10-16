@@ -89,6 +89,28 @@ body.lab {
     gap: 1.2rem;
 }
 
+button.lab-stat {
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    width: 100%;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: $radius;
+    padding: 0.8rem 1rem;
+    cursor: pointer;
+
+    &:hover {
+        background: $panel-2;
+        border-color: $border;
+    }
+
+    &.is-on {
+        background: rgba($fire-warm, 0.12);
+        border-color: rgba($fire-warm, 0.5);
+    }
+}
+
 .lab-stat {
     display: flex;
     flex-direction: column;

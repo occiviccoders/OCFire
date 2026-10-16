@@ -16,7 +16,7 @@ const LEVEL = { high: 'Elevated', moderate: 'Moderate', low: 'Low' };
 const HOUR = 3600 * 1000;
 
 const $ = (sel) => document.querySelector(sel);
-const state = { tracks: [], status: null, unmountReplay: null, sort: { key: 'sat', dir: -1 } };
+const state = { tracks: [], status: null, unmountReplay: null, filter: 'current', sort: { key: 'sat', dir: -1 } };
 
 const tip = (text) => `<span class="lab-tip" tabindex="0" data-tip="${e(text)}">i</span>`;
 
@@ -195,36 +195,66 @@ function renderSummary() {
     const became = predicted.filter((r) => r.named).length;
     const away = predicted.filter((r) => !r.named && r.quiet).length;
     const still = predicted.filter((r) => !r.named && !r.quiet).length;
+    const missed = rows.filter((r) => r.named && !r.predicted).length;
+    const statBtn = (view, count, label, note) => {
+        const on = state.filter === view;
+        return `<button type="button" class="lab-stat${on ? ' is-on' : ''}" data-view="${view}" aria-pressed="${on}"><b>${count}</b><span>${e(label)}</span>${note ? `<em>${e(note)}</em>` : ''}</button>`;
+    };
     $('#predict').innerHTML = `
         <div class="lab-stats">
-            <div class="lab-stat"><b>${became}</b><span>Became a named fire</span></div>
-            <div class="lab-stat"><b>${still}</b><span>Still burning · no name yet</span></div>
-            <div class="lab-stat"><b>${away}</b><span>Went away on its own</span></div>
+            ${statBtn('became', became, 'Became a named fire')}
+            ${statBtn('still', still, 'Still burning · no name yet')}
+            ${statBtn('away', away, 'Went away on its own')}
+            ${statBtn('missed', missed, 'We failed to predict', 'it still got a name')}
         </div>
-        <p class="lab-dim">Still early. Heat that’s still burning may get a name later, or fade.</p>`;
+        <p class="lab-dim">“Became a named fire” plus “We failed to predict” is every named fire. Heat that’s still burning may get a name later, or fade.</p>`;
 
     const named = rows.filter((r) => r.named && r.identified);
     const satSoon = named.filter((r) => r.satLead > 1);
     const usSoon = named.filter((r) => r.ourLead > 1);
     const nameFirst = named.filter((r) => r.satLead <= 1);
-    const stat = (n, d, label, meaning, range) => `
-        <div class="lab-stat"><b>${n} / ${d || 0}</b><span>${label}</span><em>${meaning}${range ? ` · ${range}` : ''}</em></div>`;
+    const stat = (view, n, d, label, meaning, range) =>
+        statBtn(view, `${n} / ${d || 0}`, label, range ? `${meaning} · ${range}` : meaning);
     $('#timing').innerHTML = `
         <div class="lab-stats">
-            ${stat(satSoon.length, named.length, 'Satellite sooner', 'if the data arrived immediately', rangePhrase(satSoon.map((r) => r.satLead)))}
-            ${stat(usSoon.length, named.length, 'Fire Watch sooner', 'caught it even with the delay', rangePhrase(usSoon.map((r) => r.ourLead)))}
-            ${stat(nameFirst.length, named.length, 'Named elsewhere', 'we didn’t have the heat yet')}
+            ${stat('sat', satSoon.length, named.length, 'Satellite sooner', 'if the data arrived immediately', rangePhrase(satSoon.map((r) => r.satLead)))}
+            ${stat('us', usSoon.length, named.length, 'Fire Watch sooner', 'caught it even with the delay', rangePhrase(usSoon.map((r) => r.ourLead)))}
+            ${stat('elsewhere', nameFirst.length, named.length, 'Named elsewhere', 'we didn’t have the heat yet')}
         </div>`;
 }
 
+function matchesFilter(r, mode) {
+    if (mode === 'predicted') return r.predicted;
+    if (mode === 'named') return r.named;
+    if (mode === 'open') return r.open;
+    if (mode === 'became') return r.predicted && r.named;
+    if (mode === 'still') return r.predicted && !r.named && !r.quiet;
+    if (mode === 'away') return r.predicted && !r.named && r.quiet;
+    if (mode === 'missed') return r.named && !r.predicted;
+    if (mode === 'sat') return r.named && r.identified && r.satLead > 1;
+    if (mode === 'us') return r.named && r.identified && r.ourLead > 1;
+    if (mode === 'elsewhere') return r.named && r.identified && r.satLead <= 1;
+    return r.named || r.open;
+}
+
 function filteredRows() {
-    const mode = $('#filter-status')?.value || 'current';
-    return observations().filter((r) => {
-        if (mode === 'predicted') return r.predicted;
-        if (mode === 'named') return r.named;
-        if (mode === 'open') return r.open;
-        return r.named || r.open;
-    });
+    return observations().filter((r) => matchesFilter(r, state.filter));
+}
+
+const SORT_STORE = 'ocfire-lab-sort';
+
+function loadSort() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SORT_STORE) || '');
+        if (saved && SORT_VALUE[saved.key] && (saved.dir === 1 || saved.dir === -1)) return saved;
+    } catch {
+        /* keep the default sort */
+    }
+    return { key: 'sat', dir: -1 };
+}
+
+function saveSort() {
+    localStorage.setItem(SORT_STORE, JSON.stringify(state.sort));
 }
 
 // Missing values sort last in either direction.
@@ -690,10 +720,24 @@ async function init() {
         return;
     }
     renderHealth();
+    state.sort = loadSort();
     renderSummary();
     renderTracks();
 
-    $('#filter-status').addEventListener('change', renderTracks);
+    const applyFilter = (mode, { scroll = false } = {}) => {
+        state.filter = mode;
+        const select = $('#filter-status');
+        if (select) select.value = mode;
+        renderSummary();
+        renderTracks();
+        if (scroll) document.getElementById('tracks')?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    $('#filter-status').addEventListener('change', () => applyFilter($('#filter-status').value));
+    document.querySelector('.lab__main').addEventListener('click', (ev) => {
+        const btn = ev.target.closest('.lab-stat[data-view]');
+        if (!btn) return;
+        applyFilter(state.filter === btn.dataset.view ? 'current' : btn.dataset.view, { scroll: true });
+    });
     $('#download').addEventListener('click', downloadCSV);
     $('#tracks thead').addEventListener('click', (ev) => {
         if (ev.target.closest('.lab-tip')) return;
@@ -703,6 +747,7 @@ async function init() {
         // Text columns start A→Z; numbers and dates start biggest/newest first.
         const ascFirst = key === 'name';
         state.sort = state.sort.key === key ? { key, dir: -state.sort.dir } : { key, dir: ascFirst ? 1 : -1 };
+        saveSort();
         renderTracks();
     });
     wireTooltips();

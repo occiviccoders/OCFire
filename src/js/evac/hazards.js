@@ -62,7 +62,7 @@ export function buildHazards({ start, rangeMi, perimeters, incidents, hotspots, 
     }
 
     for (const f of hotspots?.features || []) {
-        if (!near(f.geometry.coordinates)) continue;
+        if (f.properties.persistent || !near(f.geometry.coordinates)) continue;
         zones.push({
             name: 'Satellite hotspot',
             kind: 'hotspot',
