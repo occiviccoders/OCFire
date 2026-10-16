@@ -105,6 +105,15 @@ function fireTitle(names) {
     return `${words} Fire`;
 }
 
+// Prefer the record whose name already says Fire, then keep only that incident's clusters.
+function clockTracks(tracks) {
+    const titled = tracks.filter((t) => NAMED_FIRE.test((t.incident_name || '').trim()));
+    const pool = titled.length ? titled : tracks;
+    const best = pool.reduce((a, t) => ((t.peak_score ?? -99) > (a.peak_score ?? -99) ? t : a));
+    const same = best.incident_id ? tracks.filter((t) => t.incident_id === best.incident_id) : [best];
+    return same.length ? same : [best];
+}
+
 function isPredicted(t) {
     return t.peak_level === 'high' || (t.peak_score ?? 0) >= 5;
 }
@@ -125,32 +134,33 @@ function observations() {
         }
     }
     return [...named.values(), ...loose].map((tracks) => {
-        const peak = tracks.reduce((a, t) => ((t.peak_score ?? -99) > (a.peak_score ?? -99) ? t : a));
-        const sat = Math.min(...tracks.map((t) => Date.parse(t.first_seen)));
-        const logged = Math.min(...tracks.map((t) => Date.parse(t.first_collected || t.first_seen)));
         const names = [...new Set(tracks.map((t) => (t.incident_name || '').trim()).filter(Boolean))];
         const namedRow = names.length > 0 && names.some((n) => NAMED_FIRE.test(n) || tracks.some((t) => t.status === 'fire'));
-        const identified = namedRow
-            ? (tracks.map((t) => Date.parse(t.incident_started)).filter(Number.isFinite).sort((a, b) => a - b)[0] ?? null)
-            : null;
-        const last = Math.max(...tracks.map((t) => Date.parse(t.last_seen || t.first_seen)));
+        // One incident's tracks only. Another feed, or older heat that later inherited the name,
+        // must not move the clocks away from the timeline this row opens.
+        const timing = namedRow ? clockTracks(tracks) : tracks;
+        const clock = timing.reduce((a, t) => (Date.parse(t.first_seen) < Date.parse(a.first_seen) ? t : a));
+        const peak = timing.reduce((a, t) => ((t.peak_score ?? -99) > (a.peak_score ?? -99) ? t : a));
+        const sat = Date.parse(clock.first_seen);
+        const logged = Date.parse(clock.first_collected || clock.first_seen);
+        const identified = namedRow && Number.isFinite(Date.parse(clock.incident_started)) ? Date.parse(clock.incident_started) : null;
+        const last = Math.max(...timing.map((t) => Date.parse(t.last_seen || t.first_seen)));
         const quiet = !namedRow && (tracks.every((t) => t.status === 'not_reported' || t.status === 'recurring') || Date.now() - last >= QUIET_MS);
-        const lat = tracks.reduce((s, t) => s + t.lat, 0) / tracks.length;
-        const lng = tracks.reduce((s, t) => s + t.lng, 0) / tracks.length;
+        const acres = timing.reduce((m, t) => (t.incident_acres != null && (m == null || t.incident_acres > m) ? t.incident_acres : m), null);
         return {
-            id: peak.id,
-            name: namedRow ? fireTitle(names) : `Cluster #${peak.id}`,
-            near: namedRow ? null : nearestCity(lat, lng),
+            id: clock.id,
+            name: namedRow ? fireTitle(names) : `Cluster #${clock.id}`,
+            near: namedRow ? null : nearestCity(clock.lat, clock.lng),
             named: namedRow,
-            acres: tracks.find((t) => t.incident_acres != null)?.incident_acres ?? null,
-            clusters: tracks.length,
+            acres,
+            clusters: timing.length,
             peakScore: peak.peak_score,
             peakLevel: peak.peak_level,
-            predicted: tracks.some(isPredicted),
+            predicted: timing.some(isPredicted),
             sat, logged, identified, last, quiet,
             open: !namedRow && !quiet,
-            lat,
-            lng,
+            lat: clock.lat,
+            lng: clock.lng,
             satLead: identified ? (identified - sat) / 60000 : null,
             ourLead: identified ? (identified - logged) / 60000 : null,
         };
