@@ -83,6 +83,53 @@ body.lab {
     }
 }
 
+.lab-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.2rem;
+}
+
+.lab-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+
+    b {
+        font-size: 2.4rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    span {
+        font-size: 1.3rem;
+    }
+
+    em {
+        font-style: normal;
+        color: $text-dim;
+        font-size: 1.25rem;
+    }
+}
+
+.lab-lead {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+
+    &--sooner {
+        color: $ok;
+        background: rgba($ok, 0.16);
+    }
+
+    &--later {
+        color: $redflag;
+        background: rgba($redflag, 0.16);
+    }
+}
+
 .lab-card {
     background: $panel;
     border: 1px solid $border;

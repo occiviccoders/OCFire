@@ -15,9 +15,8 @@
                 <a class="lab__back" href="/">← California Fire Watch</a>
                 <h1 class="lab__title">Model lab</h1>
                 <p class="lab__sub">
-                    How well the alert level on unconfirmed satellite heat predicts reported fires. Every hotspot in
-                    California is tracked from its first satellite pass, scored as data arrives, and later matched against
-                    CAL FIRE and NIFC incident reports. Research only.
+                    We’re following how potential fires grow, using public data — satellites, weather, and official
+                    reports — so we can spot them sooner and help people know what’s happening.
                 </p>
             </div>
             <div class="lab__health" id="health">Loading…</div>
@@ -25,7 +24,7 @@
 
         <main class="lab__main">
             <details class="lab-card lab-card--wide lab-guide">
-                <summary class="lab-card__title">How scoring works, and what the terms mean</summary>
+                <summary class="lab-card__title">How we decide a fire is likely</summary>
                 <div class="lab-guide__grid">
                     <div>
                         <h3 class="lab-h3">Alert levels</h3>
@@ -63,57 +62,42 @@
                 </div>
             </details>
 
-            <section class="lab-card">
-                <h2 class="lab-card__title">Scorecard</h2>
-                <p class="lab-card__hint">
-                    New hotspots only (tracks that started on an already-reported fire are left out). A track is
-                    <em>resolved</em> once it's matched to a reported fire, or after 72 hours without new heat.
-                </p>
-                <div id="scorecard"></div>
+            <section class="lab-card lab-card--wide">
+                <h2 class="lab-card__title">Of all the heat we predicted would become a named fire</h2>
+                <div id="predict"></div>
             </section>
 
-            <section class="lab-card">
-                <h2 class="lab-card__title">New hotspots per day</h2>
-                <p class="lab-card__hint">Pacific time, by first satellite pass. Bar color is the strongest signal the track reached.</p>
-                <div id="daily"></div>
+            <section class="lab-card lab-card--wide">
+                <h2 class="lab-card__title">Timing vs the official name</h2>
+                <p class="lab-card__hint">Named fires only. The official name comes from fire agencies, not from our satellite data. “By …” is the spread, not an average.</p>
+                <div id="timing"></div>
             </section>
 
             <section class="lab-card lab-card--wide">
                 <div class="lab-card__head">
-                    <h2 class="lab-card__title">Tracks</h2>
+                    <h2 class="lab-card__title">All observations</h2>
                     <div class="lab-filters">
-                        <select id="filter-status" aria-label="Status">
-                            <option value="new">All new hotspots</option>
-                            <option value="fire">Became a reported fire</option>
-                            <option value="not_reported">No report (resolved)</option>
-                            <option value="recurring">Recurring heat</option>
-                            <option value="active">Still active</option>
-                            <option value="known_fire">On a known fire</option>
-                            <option value="all">Everything</option>
-                        </select>
-                        <select id="filter-signal" aria-label="Signal">
-                            <option value="any">Any signal</option>
-                            <option value="moderate">Moderate or Elevated</option>
-                            <option value="high">Elevated</option>
+                        <select id="filter-status" aria-label="Which rows">
+                            <option value="current">Named fires and heat still going</option>
+                            <option value="predicted">Predicted fires only</option>
+                            <option value="named">Named fires only</option>
+                            <option value="open">No name yet</option>
                         </select>
                         <button id="download" class="lab-btn">Download CSV</button>
                     </div>
                 </div>
+                <p class="lab-card__hint">Names open the live map. Green means sooner than the official name; red means later. Click a row for the timeline and score.</p>
                 <div class="lab-table-wrap lab-table-wrap--tall">
                     <table class="lab-table" id="tracks">
                         <thead>
                             <tr>
-                                <th data-sort="id">#</th>
-                                <th data-sort="first_seen">First pass <span class="lab-tip" tabindex="0" data-tip="When a satellite first saw this heat. This is the real first sighting.">i</span></th>
-                                <th>Location</th>
-                                <th data-sort="status">Outcome <span class="lab-tip" tabindex="0" data-tip="Reported fire: matched to a CAL FIRE or NIFC incident. No report: 72 hours with no new heat and no incident. Recurring: hot most days (farms, flares). On a known fire: next to a fire that was already reported.">i</span></th>
-                                <th data-sort="peak_score">Peak alert <span class="lab-tip" tabindex="0" data-tip="The highest alert level the track reached. Elevated = 5+ points, Moderate = 3–4, Low = under 3.">i</span></th>
-                                <th data-sort="passes">Passes <span class="lab-tip" tabindex="0" data-tip="How many satellite overpasses (or GOES scans) saw heat here.">i</span></th>
-                                <th data-sort="detections">Detections <span class="lab-tip" tabindex="0" data-tip="Total hot satellite pixels across all passes.">i</span></th>
-                                <th data-sort="max_frp">Max FRP <span class="lab-tip" tabindex="0" data-tip="Fire radiative power: heat output in megawatts. Under 5 MW is small; 20+ MW is a strong, active fire.">i</span></th>
-                                <th data-sort="moderate_known_at">Rated Moderate <span class="lab-tip" tabindex="0" data-tip="When our system first rated this track Moderate or higher, using only the data it had at that moment.">i</span></th>
-                                <th data-sort="incident_name">Reported as</th>
-                                <th data-sort="lead">Lead time <span class="lab-tip" tabindex="0" data-tip="How long before the agency's listed start time we rated it Moderate. Positive means we were earlier.">i</span></th>
+                                <th data-sort="name">What</th>
+                                <th data-sort="peak">Peak</th>
+                                <th data-sort="sat">Satellite saw</th>
+                                <th data-sort="logged">Fire Watch logged</th>
+                                <th data-sort="identified">Officially named</th>
+                                <th data-sort="satLead">Sat. lead</th>
+                                <th data-sort="ourLead">Our lead</th>
                             </tr>
                         </thead>
                         <tbody></tbody>

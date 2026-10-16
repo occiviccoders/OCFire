@@ -1,4 +1,5 @@
 import '../sass/lab.scss';
+import { nearestCity } from './caCities.js';
 import { escapeHTML as e, timeAgo } from './util.js';
 
 // Read-only API served by the research collector (workers/collector).
@@ -12,11 +13,10 @@ const STATUS = {
     known_fire: 'On known fire',
 };
 const LEVEL = { high: 'Elevated', moderate: 'Moderate', low: 'Low' };
-const RESOLVED = new Set(['fire', 'not_reported', 'recurring']);
 const HOUR = 3600 * 1000;
 
 const $ = (sel) => document.querySelector(sel);
-const state = { tracks: [], status: null, unmountReplay: null, sort: { key: 'first_seen', dir: -1 } };
+const state = { tracks: [], status: null, unmountReplay: null, sort: { key: 'sat', dir: -1 } };
 
 const tip = (text) => `<span class="lab-tip" tabindex="0" data-tip="${e(text)}">i</span>`;
 
@@ -29,15 +29,7 @@ const getJSON = async (path) => {
 const shortDate = (iso) =>
     iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 const pacificDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-const isElevated = (t) => t.peak_level === 'moderate' || t.peak_level === 'high';
 const reportedAt = (t) => t.incident_started || t.incident_seen;
-const median = (xs) => {
-    if (!xs.length) return null;
-    const s = [...xs].sort((a, b) => a - b);
-    const mid = s.length >> 1;
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-};
-const pct = (n, d) => (d ? `${Math.round((100 * n) / d)}%` : '—');
 const compass = (deg) => (deg == null ? '' : ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(deg / 45) % 8]);
 const num = (v, digits = 0) => (v == null ? '—' : Number(v).toFixed(digits));
 
@@ -49,15 +41,11 @@ function leadHours(t, knownAt) {
     return (new Date(reported) - new Date(knownAt)) / HOUR;
 }
 
-function formatLead(h) {
-    if (h == null) return '—';
-    const abs = Math.abs(h);
-    const span = abs < 48 ? `${abs.toFixed(1)} h` : `${(abs / 24).toFixed(1)} d`;
-    return h >= 0 ? `${span} before` : `${span} after`;
-}
-
-function levelBadge(level) {
-    return level ? `<span class="lab-badge lab-badge--${e(level)}">${LEVEL[level] || e(level)}</span>` : '—';
+function levelBadge(level, score) {
+    if (!level) return '—';
+    const name = LEVEL[level] || level;
+    const text = score == null || score === '' ? name : `${name} ${score}`;
+    return `<span class="lab-badge lab-badge--${e(level)}">${e(text)}</span>`;
 }
 
 function statusBadge(status) {
@@ -102,117 +90,129 @@ function renderHealth() {
             ${errors.length} of the last ${recentRuns.length} runs had a feed error (hover for details)</div>` : ''}`;
 }
 
-function renderScorecard() {
-    const fresh = state.tracks.filter((t) => t.status !== 'known_fire');
-    const rows = [
-        { label: 'Any new hotspot', test: () => true, knownAt: (t) => t.first_collected },
-        { label: 'Reached Moderate or Elevated', test: isElevated, knownAt: (t) => t.moderate_known_at },
-        { label: 'Reached Elevated', test: (t) => t.peak_level === 'high', knownAt: (t) => t.strong_known_at },
-    ].map(({ label, test, knownAt }) => {
-        const group = fresh.filter(test);
-        const resolved = group.filter((t) => RESOLVED.has(t.status));
-        const fires = resolved.filter((t) => t.status === 'fire');
-        const leads = fires.map((t) => leadHours(t, knownAt(t))).filter((h) => h != null);
-        return `
-            <tr>
-                <th>${label}</th>
-                <td>${group.length}</td>
-                <td>${resolved.length}</td>
-                <td>${fires.length}</td>
-                <td><strong>${pct(fires.length, resolved.length)}</strong></td>
-                <td>${formatLead(median(leads))}${leads.length ? ` <span class="lab-dim">(n=${leads.length})</span>` : ''}</td>
-            </tr>`;
-    });
+const NAMED_FIRE = /\b(fire|complex)$/i;
+const QUIET_MS = 72 * HOUR;
 
-    const fires = fresh.filter((t) => t.status === 'fire');
-    const timed = fires.filter((t) => !t.incident_preexisting && reportedAt(t));
-    const early = timed.filter((t) => t.moderate_known_at && new Date(t.moderate_known_at) <= new Date(reportedAt(t)));
-    const missed = fires.filter((t) => !isElevated(t));
-    const resolvedCount = fresh.filter((t) => RESOLVED.has(t.status)).length;
-    const large = fires.filter((t) => t.incident_acres >= 10);
-    const largeFlagged = large.filter(isElevated);
-
-    $('#scorecard').innerHTML = `
-        <div class="lab-table-wrap">
-            <table class="lab-table lab-table--score">
-                <thead><tr>
-                    <th>Alert level</th>
-                    <th>Tracks</th>
-                    <th>Resolved ${tip('Settled: matched to a reported fire, or 72 hours with no new heat.')}</th>
-                    <th>Reported fire</th>
-                    <th>Hit rate ${tip('Of the resolved tracks, the share that turned out to be a reported fire.')}</th>
-                    <th>Median lead time ${tip('Typical time between when we had the track at this level and the agency’s listed start time. Positive means we were earlier.')}</th>
-                </tr></thead>
-                <tbody>${rows.join('')}</tbody>
-            </table>
-        </div>
-        <ul class="lab-facts">
-            <li><strong>${early.length} of ${timed.length}</strong> reported fires reached Moderate before the agency's listed start time.</li>
-            <li><strong>${missed.length} of ${fires.length}</strong> reported fires never got past Low (misses worth studying).</li>
-            <li><strong>${largeFlagged.length} of ${large.length}</strong> reported fires that grew to 10+ acres reached Moderate or Elevated.</li>
-            <li class="lab-dim">Lead time compares when our system had the track at that level with the agency's start time.
-                Fires already listed before collection began are left out.</li>
-            ${resolvedCount < 30 ? '<li class="lab-dim">Still early: these numbers mean more once a few hundred tracks have resolved.</li>' : ''}
-        </ul>`;
+function isPredicted(t) {
+    return t.peak_level === 'high' || (t.peak_score ?? 0) >= 5;
 }
 
-function renderDaily() {
-    const days = new Map();
-    const today = new Date();
-    for (let i = 29; i >= 0; i--) days.set(pacificDay(new Date(today - i * 24 * HOUR)), { low: 0, moderate: 0, high: 0, fire: 0 });
+// One row per named fire (clusters merged) or per unnamed cluster.
+function observations() {
+    const named = new Map();
+    const loose = [];
     for (const t of state.tracks) {
-        if (t.status === 'known_fire') continue;
-        const d = days.get(pacificDay(t.first_seen));
-        if (!d) continue;
-        d[t.peak_level || 'low']++;
-        if (t.status === 'fire') d.fire++;
+        const name = (t.incident_name || '').trim();
+        if (name && NAMED_FIRE.test(name)) {
+            const key = t.incident_id || name;
+            const g = named.get(key) || [];
+            g.push(t);
+            named.set(key, g);
+        } else if (t.status !== 'known_fire') {
+            loose.push([t]);
+        }
     }
-    const max = Math.max(1, ...[...days.values()].map((d) => d.low + d.moderate + d.high));
-    const bars = [...days].map(([day, d]) => {
-        const total = d.low + d.moderate + d.high;
-        const seg = (k) => (d[k] ? `<span class="lab-bar__seg lab-bar__seg--${k}" style="height:${(100 * d[k]) / max}%"></span>` : '');
-        const label = new Date(`${day}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' });
-        return `
-            <div class="lab-bar" title="${label}: ${total} new · ${d.moderate} Moderate · ${d.high} Elevated · ${d.fire} reported fire${d.fire === 1 ? '' : 's'}">
-                <div class="lab-bar__stack">${seg('high')}${seg('moderate')}${seg('low')}</div>
-                ${d.fire ? `<span class="lab-bar__fire">${d.fire}</span>` : ''}
-                <span class="lab-bar__label">${label.replace(' ', '\u00a0')}</span>
-            </div>`;
+    return [...named.values(), ...loose].map((tracks) => {
+        const peak = tracks.reduce((a, t) => ((t.peak_score ?? -99) > (a.peak_score ?? -99) ? t : a));
+        const sat = Math.min(...tracks.map((t) => Date.parse(t.first_seen)));
+        const logged = Math.min(...tracks.map((t) => Date.parse(t.first_collected || t.first_seen)));
+        const namedRow = Boolean((tracks[0].incident_name || '').trim() && NAMED_FIRE.test(tracks[0].incident_name.trim()));
+        const identified = namedRow
+            ? (tracks.map((t) => Date.parse(t.incident_started)).filter(Number.isFinite).sort((a, b) => a - b)[0] ?? null)
+            : null;
+        const last = Math.max(...tracks.map((t) => Date.parse(t.last_seen || t.first_seen)));
+        const quiet = !namedRow && (tracks.every((t) => t.status === 'not_reported' || t.status === 'recurring') || Date.now() - last >= QUIET_MS);
+        const lat = tracks.reduce((s, t) => s + t.lat, 0) / tracks.length;
+        const lng = tracks.reduce((s, t) => s + t.lng, 0) / tracks.length;
+        return {
+            id: peak.id,
+            name: namedRow ? tracks[0].incident_name.trim() : `Cluster #${peak.id}`,
+            near: namedRow ? null : nearestCity(lat, lng),
+            named: namedRow,
+            acres: tracks.find((t) => t.incident_acres != null)?.incident_acres ?? null,
+            clusters: tracks.length,
+            peakScore: peak.peak_score,
+            peakLevel: peak.peak_level,
+            predicted: tracks.some(isPredicted),
+            sat, logged, identified, last, quiet,
+            open: !namedRow && !quiet,
+            lat,
+            lng,
+            satLead: identified ? (identified - sat) / 60000 : null,
+            ourLead: identified ? (identified - logged) / 60000 : null,
+        };
     });
-    $('#daily').innerHTML = `
-        <div class="lab-bars">${bars.join('')}</div>
-        <div class="lab-legend">
-            <span><i class="lab-bar__seg--high"></i>Elevated</span>
-            <span><i class="lab-bar__seg--moderate"></i>Moderate</span>
-            <span><i class="lab-bar__seg--low"></i>Low</span>
-            <span><b class="lab-bar__fire">n</b>became a reported fire</span>
+}
+
+function spanMin(min) {
+    const abs = Math.abs(min);
+    if (abs < 90) return `${Math.round(abs)} min`;
+    if (abs < 36 * 60) return `${(abs / 60).toFixed(1)} h`;
+    return `${(abs / 1440).toFixed(1)} d`;
+}
+
+function rangePhrase(mins) {
+    if (!mins.length) return '';
+    const a = Math.min(...mins);
+    const b = Math.max(...mins);
+    if (a < 90 && b < 90) return Math.round(a) === Math.round(b) ? `by ${Math.round(a)} min` : `by ${Math.round(a)}–${Math.round(b)} min`;
+    return Math.round(a) === Math.round(b) ? `by ${spanMin(a)}` : `by ${spanMin(a)}–${spanMin(b)}`;
+}
+
+function leadPill(min) {
+    if (min == null || !Number.isFinite(min)) return '—';
+    if (min > 1) return `<span class="lab-lead lab-lead--sooner">+${spanMin(min)} sooner</span>`;
+    if (min < -1) return `<span class="lab-lead lab-lead--later">${spanMin(min)} later</span>`;
+    return '<span class="lab-lead">same time</span>';
+}
+
+function renderSummary() {
+    const rows = observations();
+    const predicted = rows.filter((r) => r.predicted);
+    const became = predicted.filter((r) => r.named).length;
+    const away = predicted.filter((r) => !r.named && r.quiet).length;
+    const still = predicted.filter((r) => !r.named && !r.quiet).length;
+    $('#predict').innerHTML = `
+        <div class="lab-stats">
+            <div class="lab-stat"><b>${became}</b><span>Became a named fire</span></div>
+            <div class="lab-stat"><b>${still}</b><span>Still burning · no name yet</span></div>
+            <div class="lab-stat"><b>${away}</b><span>Went away on its own</span></div>
+        </div>
+        <p class="lab-dim">Still early. Heat that’s still burning may get a name later, or fade.</p>`;
+
+    const named = rows.filter((r) => r.named && r.identified);
+    const satSoon = named.filter((r) => r.satLead > 1);
+    const usSoon = named.filter((r) => r.ourLead > 1);
+    const nameFirst = named.filter((r) => r.satLead <= 1);
+    const stat = (n, d, label, note) => `
+        <div class="lab-stat"><b>${n} / ${d || 0}</b><span>${label}</span>${note ? `<em>${note}</em>` : ''}</div>`;
+    $('#timing').innerHTML = `
+        <div class="lab-stats">
+            ${stat(satSoon.length, named.length, 'Satellite sooner', rangePhrase(satSoon.map((r) => r.satLead)))}
+            ${stat(usSoon.length, named.length, 'Fire Watch sooner', rangePhrase(usSoon.map((r) => r.ourLead)))}
+            ${stat(nameFirst.length, named.length, 'Named elsewhere first', 'we didn’t have the heat yet')}
         </div>`;
 }
 
-function filteredTracks() {
-    const status = $('#filter-status').value;
-    const signal = $('#filter-signal').value;
-    return state.tracks.filter((t) => {
-        if (status === 'new' && t.status === 'known_fire') return false;
-        if (status !== 'new' && status !== 'all' && t.status !== status) return false;
-        if (signal === 'moderate' && !isElevated(t)) return false;
-        if (signal === 'high' && t.peak_level !== 'high') return false;
-        return true;
+function filteredRows() {
+    const mode = $('#filter-status')?.value || 'current';
+    return observations().filter((r) => {
+        if (mode === 'predicted') return r.predicted;
+        if (mode === 'named') return r.named;
+        if (mode === 'open') return r.open;
+        return r.named || r.open;
     });
 }
 
 // Missing values sort last in either direction.
 const SORT_VALUE = {
-    id: (t) => t.id,
-    first_seen: (t) => t.first_seen,
-    status: (t) => STATUS[t.status] || t.status,
-    peak_score: (t) => t.peak_score,
-    passes: (t) => t.passes,
-    detections: (t) => t.detections,
-    max_frp: (t) => t.max_frp,
-    moderate_known_at: (t) => t.moderate_known_at,
-    incident_name: (t) => t.incident_name || t.known_at_start,
-    lead: (t) => leadHours(t, t.moderate_known_at),
+    name: (r) => r.name,
+    peak: (r) => r.peakScore,
+    sat: (r) => r.sat,
+    logged: (r) => r.logged,
+    identified: (r) => r.identified,
+    satLead: (r) => r.satLead,
+    ourLead: (r) => r.ourLead,
 };
 
 function sortTracks(list) {
@@ -236,27 +236,28 @@ function renderSortHeaders() {
 
 function renderTracks() {
     renderSortHeaders();
-    const list = sortTracks(filteredTracks());
+    const list = sortTracks(filteredRows());
     const shown = list.slice(0, 500);
+    const sub = (r) => {
+        const place = r.near ? `near ${r.near}` : '';
+        const bits = [r.named ? 'Named fire' : [r.open ? 'No name yet' : 'Went quiet', place].filter(Boolean).join(' · ')];
+        if (r.named && r.acres != null) bits.push(`${r.acres < 1 ? '<1' : Math.round(r.acres).toLocaleString()} ac`);
+        if (r.clusters > 1) bits.push(`${r.clusters} clusters`);
+        return bits.join(' · ');
+    };
+    const href = (r) => `/?at=${r.lat.toFixed(4)},${r.lng.toFixed(4)}&zoom=11&label=${encodeURIComponent(r.name)}`;
     $('#tracks tbody').innerHTML = shown.length
-        ? shown.map((t) => `
-            <tr data-id="${t.id}">
-                <td>${t.id}</td>
-                <td>${shortDate(t.first_seen)}</td>
-                <td>${mapLink(t)}</td>
-                <td>${statusBadge(t.status)}${t.incident_id ? `<div class="lab-dim lab-sub">${e(trackFireStatus(t))}</div>` : ''}</td>
-                <td>${levelBadge(t.peak_level)}</td>
-                <td>${t.passes}</td>
-                <td>${t.detections}</td>
-                <td>${num(t.max_frp, 1)}</td>
-                <td>${shortDate(t.moderate_known_at)}</td>
-                <td>${t.incident_name ? e(t.incident_name) : t.known_at_start ? `<span class="lab-dim">${e(t.known_at_start)}</span>` : '—'}</td>
-                <td>${formatLead(leadHours(t, t.moderate_known_at))}</td>
+        ? shown.map((r) => `
+            <tr data-id="${r.id}">
+                <td><a href="${href(r)}" data-stop>${e(r.name)}</a><div class="lab-dim lab-sub">${e(sub(r))}</div></td>
+                <td>${levelBadge(r.peakLevel, r.peakScore)}</td>
+                <td>${shortDate(new Date(r.sat).toISOString())}</td>
+                <td>${shortDate(new Date(r.logged).toISOString())}</td>
+                <td>${r.identified ? shortDate(new Date(r.identified).toISOString()) : '—'}</td>
+                <td>${leadPill(r.satLead)}</td>
+                <td>${leadPill(r.ourLead)}</td>
             </tr>`).join('')
-        : '<tr><td colspan="11" class="lab-empty">No tracks match these filters yet.</td></tr>';
-    if (list.length > shown.length) {
-        $('#tracks tbody').insertAdjacentHTML('beforeend', `<tr><td colspan="11" class="lab-empty">Showing 500 of ${list.length}. Download the CSV for all.</td></tr>`);
-    }
+        : '<tr><td colspan="7" class="lab-empty">Nothing in this list yet.</td></tr>';
 }
 
 function scoreChart(snapshots, track) {
@@ -582,7 +583,7 @@ async function showDetail(id) {
                         <td>${['None', 'Light', 'Medium', 'Heavy'][s.smoke_level] || '—'}</td>
                         <td>${s.chp_fire_reports ?? '—'}</td>
                         <td>${s.past_days ?? '—'} d</td>
-                        <td>${levelBadge(s.level)} ${s.score}</td>
+                        <td>${levelBadge(s.level, s.score)}</td>
                     </tr>`).join('')}</tbody>
             </table>
         </div>`;
@@ -597,11 +598,11 @@ async function showDetail(id) {
 }
 
 function downloadCSV() {
-    const rows = filteredTracks();
+    const rows = filteredRows();
     if (!rows.length) return;
-    const columns = [...Object.keys(rows[0]), 'lead_hours_moderate'];
+    const columns = ['name', 'named', 'peakLevel', 'peakScore', 'sat', 'logged', 'identified', 'satLead', 'ourLead', 'lat', 'lng'];
     const cell = (v) => (v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-    const lines = [columns.join(','), ...rows.map((t) => columns.map((c) => cell(c === 'lead_hours_moderate' ? leadHours(t, t.moderate_known_at)?.toFixed(2) : t[c])).join(','))];
+    const lines = [columns.join(','), ...rows.map((r) => columns.map((c) => cell(typeof r[c] === 'number' && c.endsWith('Lead') ? r[c].toFixed(1) : r[c])).join(','))];
     const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
     const a = Object.assign(document.createElement('a'), { href: url, download: `fire-watch-tracks-${pacificDay(new Date())}.csv` });
     a.click();
@@ -666,12 +667,10 @@ async function init() {
         return;
     }
     renderHealth();
-    renderScorecard();
-    renderDaily();
+    renderSummary();
     renderTracks();
 
     $('#filter-status').addEventListener('change', renderTracks);
-    $('#filter-signal').addEventListener('change', renderTracks);
     $('#download').addEventListener('click', downloadCSV);
     $('#tracks thead').addEventListener('click', (ev) => {
         if (ev.target.closest('.lab-tip')) return;
@@ -679,7 +678,7 @@ async function init() {
         if (!th) return;
         const key = th.dataset.sort;
         // Text columns start A→Z; numbers and dates start biggest/newest first.
-        const ascFirst = key === 'status' || key === 'incident_name';
+        const ascFirst = key === 'name';
         state.sort = state.sort.key === key ? { key, dir: -state.sort.dir } : { key, dir: ascFirst ? 1 : -1 };
         renderTracks();
     });
