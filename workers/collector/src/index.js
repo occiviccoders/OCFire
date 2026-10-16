@@ -610,7 +610,7 @@ export default {
         if (pathname === '/api/status') return json(await status(env.DB));
         if (pathname === '/api/tracks') return json((await env.DB.prepare(TRACKS_SQL).all()).results);
         if (pathname === '/api/social') {
-            const { results } = await env.DB.prepare("SELECT incident_id, kind, created_at, status, post_id, text, error FROM social_posts WHERE status != 'skipped' ORDER BY id DESC LIMIT 50").all();
+            const { results } = await env.DB.prepare("SELECT incident_id, kind, created_at, status, post_id, text, error, platform FROM social_posts WHERE status != 'skipped' ORDER BY id DESC LIMIT 50").all();
             return json({ mode: env.SOCIAL_MODE || 'off', posts: results });
         }
         const match = pathname.match(/^\/api\/tracks\/(\d+)$/);

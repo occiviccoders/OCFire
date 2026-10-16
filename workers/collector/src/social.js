@@ -1,9 +1,10 @@
-// Posts CAL FIRE-named fires to X: once when a new fire appears, then about twice a day per open fire,
-// spread across daytime hours (one update per run, the fire waiting longest first). Agency-reported
-// incidents only; unconfirmed satellite heat is never posted.
+// Posts CAL FIRE-named fires to the California Fire Watch Facebook Page.
+// One post when a fire is newly named, then about twice a day while it is still open, spread across
+// daytime hours (one update per run, the fire waiting longest first). A final post at 100% contained.
+// Agency-reported incidents only; unconfirmed satellite heat is never posted.
 //
-// SOCIAL_MODE: "off" (default), "dry_run" (compose and log to social_posts without posting), or "live".
-// SOCIAL_DAILY_CAP: posts per rolling 24 hours (X's free tier allows only a handful a day).
+// SOCIAL_MODE: "off" (default), "dry_run" (compose and log without posting), or "live".
+// SOCIAL_DAILY_CAP: posts per rolling 24 hours.
 
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
@@ -83,6 +84,21 @@ async function postToX(env, text) {
     return body.data.id;
 }
 
+const PLATFORM = 'facebook';
+
+async function postToFacebook(env, text) {
+    if (!env.FB_PAGE_ID || !env.FB_PAGE_TOKEN) throw new Error('Facebook Page token is not configured');
+    const res = await fetch(`https://graph.facebook.com/v26.0/${env.FB_PAGE_ID}/feed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ message: text, access_token: env.FB_PAGE_TOKEN }),
+        signal: AbortSignal.timeout(15000),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.id) throw new Error(`Facebook ${res.status}: ${JSON.stringify(body).slice(0, 200)}`);
+    return body.id;
+}
+
 // ---------- Run ----------
 
 export async function runSocial(env, now = Date.now(), { anyHour = false } = {}) {
@@ -93,8 +109,8 @@ export async function runSocial(env, now = Date.now(), { anyHour = false } = {})
 
     const [{ results: incidents }, { results: history }, used] = await Promise.all([
         db.prepare("SELECT * FROM incidents WHERE source = 'calfire' AND active = 1 AND started >= ?").bind(iso(now - LOOKBACK_MS)).all(),
-        db.prepare("SELECT incident_id, kind, created_at, acres, contained FROM social_posts WHERE status != 'error' AND created_at >= ? ORDER BY created_at").bind(iso(now - LOOKBACK_MS)).all(),
-        db.prepare("SELECT COUNT(*) AS n FROM social_posts WHERE status IN ('posted', 'dry_run', 'error') AND created_at >= ?").bind(iso(now - DAY)).first(),
+        db.prepare("SELECT incident_id, kind, created_at, acres, contained FROM social_posts WHERE platform = ? AND status != 'error' AND created_at >= ? ORDER BY created_at").bind(PLATFORM, iso(now - LOOKBACK_MS)).all(),
+        db.prepare("SELECT COUNT(*) AS n FROM social_posts WHERE platform = ? AND status IN ('posted', 'dry_run', 'error') AND created_at >= ?").bind(PLATFORM, iso(now - DAY)).first(),
     ]);
     const last = new Map(history.map((p) => [p.incident_id, p]));
 
@@ -120,10 +136,10 @@ export async function runSocial(env, now = Date.now(), { anyHour = false } = {})
     const inHours = anyHour || (hour >= POST_HOURS[0] && hour < POST_HOURS[1]);
     const queue = [...fresh.slice(0, NEW_PER_RUN), ...(inHours ? updates.slice(0, UPDATES_PER_RUN) : [])];
 
-    const insert = db.prepare('INSERT INTO social_posts (incident_id, kind, created_at, status, post_id, text, acres, contained, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insert = db.prepare('INSERT INTO social_posts (incident_id, kind, created_at, status, post_id, text, acres, contained, error, platform) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const nowIso = iso(now);
     // Fires already burning when we started watching: remember them without announcing.
-    if (seeds.length) await db.batch(seeds.map((i) => insert.bind(i.id, 'seed', nowIso, 'skipped', null, null, i.acres, i.contained, null)));
+    if (seeds.length) await db.batch(seeds.map((i) => insert.bind(i.id, 'seed', nowIso, 'skipped', null, null, i.acres, i.contained, null, PLATFORM)));
 
     const budget = Math.max(0, cap - used.n);
     const results = [];
@@ -134,14 +150,14 @@ export async function runSocial(env, now = Date.now(), { anyHour = false } = {})
         let error = null;
         if (mode === 'live') {
             try {
-                postId = await postToX(env, text);
+                postId = await postToFacebook(env, text);
                 status = 'posted';
             } catch (err) {
                 status = 'error';
                 error = err.message;
             }
         }
-        await insert.bind(i.id, kind, nowIso, status, postId, text, i.acres, i.contained, error).run();
+        await insert.bind(i.id, kind, nowIso, status, postId, text, i.acres, i.contained, error, PLATFORM).run();
         results.push({ kind, name: i.name, status, error });
     }
     return { mode, new: fresh.length, due: updates.length, seeded: seeds.length, budget, results };

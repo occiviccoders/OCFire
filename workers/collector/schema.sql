@@ -143,7 +143,8 @@ CREATE TABLE IF NOT EXISTS social_posts (
     text TEXT,
     acres REAL,
     contained REAL,
-    error TEXT
+    error TEXT,
+    platform TEXT NOT NULL DEFAULT 'facebook' -- facebook | x
 );
 CREATE INDEX IF NOT EXISTS social_posts_incident ON social_posts (incident_id, created_at);
 CREATE INDEX IF NOT EXISTS social_posts_created ON social_posts (created_at);
