@@ -93,6 +93,18 @@ function renderHealth() {
 const NAMED_FIRE = /\b(fire|complex)$/i;
 const QUIET_MS = 72 * HOUR;
 
+// WFIGS often stores just "BRYSON". CAL FIRE stores "Henderson Fire". Same fire either way.
+function bareName(name) {
+    return name.trim().replace(/\s+(fire|complex)$/i, '');
+}
+
+function fireTitle(names) {
+    const titled = names.find((n) => NAMED_FIRE.test(n));
+    if (titled) return titled.trim();
+    const words = bareName(names[0]).toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    return `${words} Fire`;
+}
+
 function isPredicted(t) {
     return t.peak_level === 'high' || (t.peak_score ?? 0) >= 5;
 }
@@ -103,8 +115,8 @@ function observations() {
     const loose = [];
     for (const t of state.tracks) {
         const name = (t.incident_name || '').trim();
-        if (name && NAMED_FIRE.test(name)) {
-            const key = t.incident_id || name;
+        if (name && (NAMED_FIRE.test(name) || t.status === 'fire')) {
+            const key = bareName(name).toUpperCase();
             const g = named.get(key) || [];
             g.push(t);
             named.set(key, g);
@@ -116,7 +128,8 @@ function observations() {
         const peak = tracks.reduce((a, t) => ((t.peak_score ?? -99) > (a.peak_score ?? -99) ? t : a));
         const sat = Math.min(...tracks.map((t) => Date.parse(t.first_seen)));
         const logged = Math.min(...tracks.map((t) => Date.parse(t.first_collected || t.first_seen)));
-        const namedRow = Boolean((tracks[0].incident_name || '').trim() && NAMED_FIRE.test(tracks[0].incident_name.trim()));
+        const names = [...new Set(tracks.map((t) => (t.incident_name || '').trim()).filter(Boolean))];
+        const namedRow = names.length > 0 && names.some((n) => NAMED_FIRE.test(n) || tracks.some((t) => t.status === 'fire'));
         const identified = namedRow
             ? (tracks.map((t) => Date.parse(t.incident_started)).filter(Number.isFinite).sort((a, b) => a - b)[0] ?? null)
             : null;
@@ -126,7 +139,7 @@ function observations() {
         const lng = tracks.reduce((s, t) => s + t.lng, 0) / tracks.length;
         return {
             id: peak.id,
-            name: namedRow ? tracks[0].incident_name.trim() : `Cluster #${peak.id}`,
+            name: namedRow ? fireTitle(names) : `Cluster #${peak.id}`,
             near: namedRow ? null : nearestCity(lat, lng),
             named: namedRow,
             acres: tracks.find((t) => t.incident_acres != null)?.incident_acres ?? null,
