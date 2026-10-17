@@ -1,0 +1,29 @@
+name: Daily fire reel
+
+on:
+  schedule:
+    # 13:30 UTC is 6:30am during daylight time and 5:30am in winter, before the 8am post.
+    - cron: '30 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the recorder
+        working-directory: scripts/reel
+        run: npm ci
+      - name: Install Chromium
+        working-directory: scripts/reel
+        run: npx playwright install --with-deps chromium
+      - name: Record and upload
+        working-directory: scripts/reel
+        env:
+          CI: 'true'
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: node record.mjs

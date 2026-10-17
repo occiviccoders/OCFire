@@ -16,7 +16,9 @@ import { pointInGeometry } from '../../../src/js/geo.js';
 import { distanceMiles } from '../../../src/js/util.js';
 import { CA_BBOX } from '../../../src/js/config.js';
 import { fetchLandCover, fetchSiteFacts } from '../../../src/js/siteFacts.js';
-import { runSocial } from './social.js';
+import { reelSubject, runSocial } from './social.js';
+import { renderCard } from './card.js';
+import wasm from '@resvg/resvg-wasm/index_bg.wasm';
 
 const SOCIAL_CRON = '5,35 * * * *';
 
@@ -592,7 +594,7 @@ const json = (data, status = 200) => Response.json(data, { status, headers: API_
 export default {
     // Social posting runs on its own cron so it gets its own subrequest budget.
     async scheduled(event, env, ctx) {
-        if (event.cron === SOCIAL_CRON) ctx.waitUntil(runSocial(env).then((s) => console.log('social', JSON.stringify(s))));
+        if (event.cron === SOCIAL_CRON) ctx.waitUntil(runSocial(env, Date.now(), { wasm }).then((s) => console.log('social', JSON.stringify(s))));
         else ctx.waitUntil(collect(env).then((s) => console.log('collect', JSON.stringify(s))));
     },
     async fetch(request, env) {
@@ -600,15 +602,77 @@ export default {
         // Manual "post now" (ignores posting hours; caps still apply). Needs the ADMIN_TOKEN secret.
         if (request.method === 'POST' && pathname === '/api/social/run') {
             if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
-            return json(await runSocial(env, Date.now(), { anyHour: true }));
+            return json(await runSocial(env, Date.now(), { anyHour: true, wasm }));
         }
-        if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
+        if (request.method === 'POST' && pathname === '/api/card.jpg') {
+            if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
+            const bytes = new Uint8Array(await request.arrayBuffer());
+            if (bytes.length < 1000 || bytes.length > 900000 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return json({ error: 'Expected a JPEG' }, 400);
+            const id = crypto.randomUUID();
+            await env.CARDS.put(`${id}.jpg`, bytes);
+            return json({ id, url: `https://ocfire-collector.initial-apps.workers.dev/api/card.jpg?id=${id}` });
+        }
+        if (request.method === 'POST' && pathname === '/api/reel.mp4') {
+            if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
+            const bytes = new Uint8Array(await request.arrayBuffer());
+            const brand = new TextDecoder().decode(bytes.slice(4, 8));
+            if (bytes.length < 100000 || bytes.length > 20000000 || brand !== 'ftyp') return json({ error: 'Expected an MP4 under 20MB' }, 400);
+            const q = new URL(request.url).searchParams;
+            const name = q.get('name');
+            const lat = Number(q.get('lat'));
+            const lng = Number(q.get('lng'));
+            if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: 'name, lat, and lng are required' }, 400);
+            const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+            const acres = q.get('acres');
+            const contained = q.get('contained');
+            const meta = {
+                id: q.get('id') || name,
+                name,
+                county: q.get('county') || '',
+                lat,
+                lng,
+                acres: acres == null || acres === '' ? null : Number(acres),
+                contained: contained == null || contained === '' ? null : Number(contained),
+                day,
+            };
+            await env.CARDS.put('reel/latest.mp4', bytes);
+            await env.CARDS.put('reel/latest.json', JSON.stringify(meta));
+            return json({ ok: true, day, name, url: 'https://ocfire-collector.initial-apps.workers.dev/api/reel.mp4' });
+        }
+        if (request.method !== 'GET' && !(request.method === 'HEAD' && pathname === '/api/reel.mp4')) return new Response('Method not allowed', { status: 405 });
         if (pathname === '/') {
             if ((request.headers.get('Accept') || '').includes('text/html')) return Response.redirect(`${env.SITE}/lab`, 302);
             return json(await status(env.DB));
         }
         if (pathname === '/api/status') return json(await status(env.DB));
         if (pathname === '/api/tracks') return json((await env.DB.prepare(TRACKS_SQL).all()).results);
+        if (pathname === '/api/card.jpg') {
+            try {
+                const url = new URL(request.url);
+                const id = url.searchParams.get('id');
+                if (id) {
+                    const jpg = await env.CARDS.get(`${id}.jpg`, { type: 'arrayBuffer' });
+                    if (!jpg) return new Response('Not found', { status: 404 });
+                    return new Response(jpg, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*' } });
+                }
+                const q = Object.fromEntries(url.searchParams);
+                const jpg = await renderCard(q, wasm);
+                return new Response(jpg, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=600', 'Access-Control-Allow-Origin': '*' } });
+            } catch (err) {
+                return new Response(err.message || 'Card failed', { status: 500 });
+            }
+        }
+        if (pathname === '/api/reel.mp4') {
+            const mp4 = await env.CARDS.get('reel/latest.mp4', { type: 'arrayBuffer' });
+            if (!mp4) return new Response('Not found', { status: 404 });
+            const headers = { 'content-type': 'video/mp4', 'content-length': String(mp4.byteLength), 'cache-control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' };
+            if (request.method === 'HEAD') return new Response(null, { headers });
+            return new Response(mp4, { headers });
+        }
+        if (pathname === '/api/reel/subject') {
+            const subject = await reelSubject(env.DB);
+            return subject ? json(subject) : json({ error: 'No open named fire' }, 404);
+        }
         if (pathname === '/api/social') {
             const { results } = await env.DB.prepare("SELECT incident_id, kind, created_at, status, post_id, text, error, platform FROM social_posts WHERE status != 'skipped' ORDER BY id DESC LIMIT 50").all();
             return json({ mode: env.SOCIAL_MODE || 'off', posts: results });

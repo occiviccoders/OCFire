@@ -570,7 +570,8 @@ map.on('load', () => {
     addWindArrowLayer(map, 'hotspots-glow');
     windParticles = new WindParticles(map);
     hdwLayer = createHdwLayer(map, 'fireweather-fill');
-    if (import.meta.env.DEV) window.__ocfire = { map, state };
+    // ?reel=1 lets the daily recorder drive the live map. Ordinary visits do not get this.
+    if (import.meta.env.DEV || new URLSearchParams(location.search).has('reel')) window.__ocfire = { map, state };
     planner = createPlanner(map, () => ({
         perimeters: state.perimeters,
         incidents: state.incidents,

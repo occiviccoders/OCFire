@@ -8,14 +8,20 @@ crons = ["*/15 * * * *", "5,35 * * * *"]
 
 [vars]
 SITE = "https://firewatch.occiviccoders.com"
-# off | dry_run | live. Live posts to the Facebook Page (see src/social.js). X stays manual.
+# off | dry_run | live. Live posts a satellite card of the fire to the Facebook Page and Instagram. X stays manual.
 SOCIAL_MODE = "live"
-SOCIAL_DAILY_CAP = "8"
+SOCIAL_DAILY_CAP = "50"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "ocfire-research"
 database_id = "4e125d0a-9e10-4343-89db-300f8f44fa26"
+
+# Saved satellite cards. Instagram fetches the picture, so it has to come back immediately.
+[[kv_namespaces]]
+binding = "CARDS"
+id = "11ba1e29656b479db3cb7bc8442dcd22"
+
 
 [observability]
 enabled = true
