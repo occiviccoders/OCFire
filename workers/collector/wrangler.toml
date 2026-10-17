@@ -11,6 +11,11 @@ SITE = "https://firewatch.occiviccoders.com"
 # off | dry_run | live. Live posts a satellite card of the fire to the Facebook Page and Instagram. X stays manual.
 SOCIAL_MODE = "live"
 SOCIAL_DAILY_CAP = "50"
+SOCIAL_EMAIL_TO = "info@initialapps.com"
+SOCIAL_EMAIL_FROM = "noreply@occiviccoders.com"
+
+[[send_email]]
+name = "EMAIL"
 
 [[d1_databases]]
 binding = "DB"

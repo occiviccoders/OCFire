@@ -1,9 +1,11 @@
 import { cardUrl, renderCard } from './card.js';
+import { ensureApproval } from './approval.js';
 
 // Posts CAL FIRE-named fires to the California Fire Watch Facebook Page and Instagram account.
 // One post when a fire is newly named, then about twice a day while it is still open, spread across
 // daytime hours (one update per run, the fire waiting longest first). A final post at 100% contained.
 // A separate once-a-day video, recorded elsewhere and stored in KV, goes out at 8 AM, 1 PM, and 6 PM Pacific.
+// Posting stops at the end of the approved month until the email link is clicked.
 // Agency-reported incidents only; unconfirmed satellite heat is never posted.
 // The Facebook history decides what is due. Both get the same caption and a satellite card of that fire.
 //
@@ -38,56 +40,98 @@ export function mapLink(site, i) {
     return `${site}/?${params}`;
 }
 
-export function compose(kind, i, last, site, now = Date.now()) {
-    const tag = hashtag(i.name);
+const SOUTH = new Set(['orange', 'san diego', 'los angeles', 'riverside', 'san bernardino', 'ventura', 'imperial', 'santa barbara', 'san luis obispo']);
+
+export function hashtagList(i, place = {}) {
+    const county = (i.county || '').trim();
+    const city = (place.city || '').trim();
+    const tags = [
+        hashtag(i.name),
+        city ? hashtag(city) : null,
+        county ? hashtag(`${county} County`) : null,
+        county ? hashtag(`${county} County Fire`) : null,
+        '#CAwildfire',
+        county ? (SOUTH.has(county.toLowerCase()) ? '#SoCalFire' : '#NorCalFire') : null,
+    ];
+    return [...new Set(tags.filter(Boolean))].slice(0, 8);
+}
+
+const cleanPlace = (name) => (name || '').replace(/\s+(CCD|CDP|city|town)$/i, '').replace(/\s+County$/i, '').trim();
+
+async function placeFor(env, i) {
+    if (!env?.CARDS || i.lat == null || i.lng == null) return {};
+    const key = `geo/${Number(i.lat).toFixed(2)},${Number(i.lng).toFixed(2)}`;
+    const cached = await env.CARDS.get(key, { type: 'json' });
+    if (cached) return cached;
+    let city = '';
+    try {
+        const geo = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=12&lat=${i.lat}&lon=${i.lng}`, {
+            headers: { 'User-Agent': 'California Fire Watch (info@initialapps.com)', Accept: 'application/json' },
+            signal: AbortSignal.timeout(8000),
+        });
+        const body = await geo.json();
+        const address = body.address || {};
+        city = cleanPlace(address.city || address.town || address.village || address.hamlet || address.suburb);
+    } catch { /* the county tag still stands */ }
+    if (!city) {
+        try {
+            const census = await fetch(`https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=${i.lng}&y=${i.lat}&benchmark=Public_AR_Current&vintage=Current_Current&format=json`, { signal: AbortSignal.timeout(8000) });
+            const layers = (await census.json())?.result?.geographies || {};
+            const named = [...(layers['Incorporated Places'] || []), ...(layers['County Subdivisions'] || [])];
+            city = cleanPlace(named.map((row) => row.NAME || row.BASENAME).find(Boolean));
+        } catch { /* county only */ }
+    }
+    if (city && i.county && city.toLowerCase() === i.county.toLowerCase()) city = '';
+    const place = { city };
+    await env.CARDS.put(key, JSON.stringify(place), { expirationTtl: 14 * 24 * 3600 });
+    return place;
+}
+
+export async function tagsFor(env, i) {
+    return hashtagList(i, await placeFor(env, i)).join(' ');
+}
+
+export function compose(kind, i, last, site, now = Date.now(), tags = '') {
     const where = i.county ? `${i.county} County` : 'California';
-    const tags = [tag, i.county ? hashtag(`${i.county} County`) : null, '#CAwildfire'].filter(Boolean).join(' ');
+    const tagLine = tags || hashtagList(i).join(' ');
     const contained = i.contained == null ? '' : `, ${Math.round(i.contained)}% contained`;
     const link = mapLink(site, i);
     const mapLine = `See the latest interactive map, with the next 3 days of wind, smoke, and live cameras: ${link}`;
     if (kind === 'new') {
-        return `New fire reported: ${i.name}, ${where}. ${acresText(i.acres)}${contained}, per CAL FIRE.\n\n${mapLine}\n\n#NewFire ${tags}`;
+        return `New fire reported: ${i.name}, ${where}. ${acresText(i.acres)}${contained}, per CAL FIRE.\n\n${mapLine}\n\n#NewFire ${tagLine}`;
     }
     // The time keeps repeat updates on an unchanged fire from being rejected by X as duplicate posts.
     const asOf = `as of ${pacific(now, { hour: 'numeric', minute: '2-digit' })}`;
     if (i.contained >= 100) {
-        return `${i.name} (${where}) is 100% contained at ${acresText(i.acres)}, per CAL FIRE ${asOf}.\n\n${mapLine}\n\n${tags}`;
+        return `${i.name} (${where}) is 100% contained at ${acresText(i.acres)}, per CAL FIRE ${asOf}.\n\n${mapLine}\n\n${tagLine}`;
     }
     const grew = last?.acres != null && i.acres != null && i.acres > last.acres ? ` Up from ${acresText(last.acres)}.` : '';
-    return `${i.name}, ${where}: ${acresText(i.acres)}${contained} ${asOf}, per CAL FIRE.${grew}\n\n${mapLine}\n\n${tags}`;
+    return `${i.name}, ${where}: ${acresText(i.acres)}${contained} ${asOf}, per CAL FIRE.${grew}\n\n${mapLine}\n\n${tagLine}`;
 }
 
-const SOUTH = new Set(['orange', 'san diego', 'los angeles', 'riverside', 'san bernardino', 'ventura', 'imperial', 'santa barbara', 'san luis obispo']);
 const SLOT_LINE = { 8: 'This morning', 13: 'This afternoon', 18: 'This evening' };
 
-export function reelHashtags(i) {
-    const county = (i.county || '').trim();
-    const tags = [
-        hashtag(i.name),
-        county ? hashtag(`${county} County`) : null,
-        county ? `#${county.replace(/[^A-Za-z0-9]/g, '')}Fire` : null,
-        '#CAwildfire', '#CaliforniaWildfire', '#CaliforniaFire', '#Wildfire', '#Wildfires',
-        '#California', '#FireSeason', '#FireWatch',
-    ];
-    if (SOUTH.has(county.toLowerCase())) tags.push('#SoCal', '#SouthernCalifornia');
-    if (county.toLowerCase() === 'orange') tags.push('#OCFire', '#OrangeCountyFire');
-    return [...new Set(tags.filter(Boolean))].join(' ');
-}
-
-export function composeReel(i, site, now = Date.now()) {
+export function composeReel(i, site, now = Date.now(), tags = '') {
     const where = i.county ? `${i.county} County` : 'California';
     const contained = i.contained == null ? '' : `, ${Math.round(i.contained)}% contained`;
     const when = SLOT_LINE[pacificHour(now)] || 'Today';
-    return `${when}: ${i.name}, ${where}. ${acresText(i.acres)}${contained}, per CAL FIRE.\n\nSee the latest interactive map, with the next 3 days of wind, smoke, and live cameras: ${mapLink(site, i)}\n\n${reelHashtags(i)}`;
+    return `${when}: ${i.name}, ${where}. ${acresText(i.acres)}${contained}, per CAL FIRE.\n\nSee the latest interactive map, with the next 3 days of wind, smoke, and live cameras: ${mapLink(site, i)}\n\n${tags || hashtagList(i).join(' ')}`;
 }
 
+const reelFire = (i) => ({ id: i.id, name: i.name, acres: i.acres, contained: i.contained, county: i.county, lat: i.lat, lng: i.lng });
+
+// A fire that already had a reel this week waits, so the next morning films a different one.
 export async function reelSubject(db, now = Date.now()) {
     const { results } = await db.prepare("SELECT * FROM incidents WHERE source = 'calfire' AND active = 1 AND started >= ?").bind(iso(now - LOOKBACK_MS)).all();
     const named = results.filter((i) => isNamedFire(i.name) && i.lat != null && (i.contained ?? 0) < 100);
     named.sort((a, b) => (b.acres || 0) - (a.acres || 0) || Date.parse(b.first_seen) - Date.parse(a.first_seen));
-    const i = named[0];
-    if (!i) return null;
-    return { id: i.id, name: i.name, acres: i.acres, contained: i.contained, county: i.county, lat: i.lat, lng: i.lng };
+    if (!named.length) return null;
+    const { results: reels } = await db.prepare("SELECT incident_id, MAX(created_at) AS last_at FROM social_posts WHERE kind = 'reel' AND status = 'posted' AND created_at >= ? GROUP BY incident_id").bind(iso(now - 6 * DAY)).all();
+    const recent = new Set(reels.map((r) => r.incident_id));
+    const next = named.find((i) => !recent.has(i.id));
+    if (next) return reelFire(next);
+    const oldest = [...reels].sort((a, b) => Date.parse(a.last_at) - Date.parse(b.last_at))[0];
+    return reelFire(named.find((i) => i.id === oldest?.incident_id) || named[0]);
 }
 
 const pacificDay = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
@@ -204,8 +248,8 @@ async function postReelToInstagram(env, text, videoUrl) {
     const container = await created.json().catch(() => ({}));
     if (!created.ok || !container.id) throw new Error(`Instagram reel ${created.status}: ${JSON.stringify(container).slice(0, 200)}`);
     let status = null;
-    for (let attempt = 0; attempt < 10; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 8000));
         const check = await graph(container.id, new URLSearchParams({ fields: 'status_code', access_token: env.FB_PAGE_TOKEN }));
         status = check.body.status_code;
         if (status === 'FINISHED') break;
@@ -250,6 +294,8 @@ async function imageFor(env, fire, wasm) {
 export async function runSocial(env, now = Date.now(), { anyHour = false, wasm = null } = {}) {
     const mode = env.SOCIAL_MODE || 'off';
     if (mode === 'off') return { mode };
+    const approval = await ensureApproval(env, now);
+    if (!approval.ok) return { mode, approval: 'stopped', until: approval.until, email: approval.email };
     const db = env.DB;
     const cap = Number(env.SOCIAL_DAILY_CAP || 50);
 
@@ -290,7 +336,7 @@ export async function runSocial(env, now = Date.now(), { anyHour = false, wasm =
     const budget = Math.max(0, cap - used.n);
     const results = [];
     for (const { kind, i, prev } of queue.slice(0, budget)) {
-        const text = compose(kind, i, prev, env.SITE, now);
+        const text = compose(kind, i, prev, env.SITE, now, await tagsFor(env, i));
         const image = await imageFor(env, i, wasm);
         let status = 'dry_run';
         let postId = null;
@@ -325,20 +371,32 @@ export async function runSocial(env, now = Date.now(), { anyHour = false, wasm =
     return { mode, new: fresh.length, due: updates.length, seeded: seeds.length, budget, results, reel };
 }
 
+const REEL_INSERT = 'INSERT INTO social_posts (incident_id, kind, created_at, status, post_id, text, acres, contained, error, platform) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+export async function publishStoredReel(env, now = Date.now()) {
+    const mode = env.SOCIAL_MODE || 'off';
+    if (mode === 'off') return { mode };
+    const approval = await ensureApproval(env, now);
+    if (!approval.ok) return { approval: 'stopped', until: approval.until, email: approval.email };
+    const cap = Number(env.SOCIAL_DAILY_CAP || 50);
+    const used = await env.DB.prepare("SELECT COUNT(*) AS n FROM social_posts WHERE platform = ? AND status IN ('posted', 'dry_run', 'error') AND created_at >= ?").bind(PLATFORM, iso(now - DAY)).first();
+    return maybePostReel(env, env.DB.prepare(REEL_INSERT), now, mode, used.n, cap, true);
+}
+
 // The clip is recorded once a day and saved in KV. This only publishes it.
-async function maybePostReel(env, insert, now, mode, used, cap) {
+async function maybePostReel(env, insert, now, mode, used, cap, force = false) {
     const hour = pacificHour(now);
     const minute = Number(pacific(now, { minute: '2-digit' }));
-    if (!REEL_HOURS.includes(hour) || minute >= 20) return 'later';
-    if (used >= cap) return 'cap';
+    if (!force && (!REEL_HOURS.includes(hour) || minute >= 20)) return { facebook: 'later' };
+    if (used >= cap) return { facebook: 'cap' };
     const meta = await env.CARDS.get('reel/latest.json', { type: 'json' });
-    if (!meta?.name || !meta.lat) return 'none';
+    if (!meta?.name || !meta.lat) return { facebook: 'none' };
     const day = pacificDay(now);
-    if (meta.day !== day) return 'stale';
-    const flag = `reel/posted/${day}/${hour}`;
-    if (await env.CARDS.get(flag)) return 'already';
+    if (meta.day !== day) return { facebook: 'stale' };
+    const flag = `reel/posted/${day}/${force ? 'now' : hour}`;
+    if (await env.CARDS.get(flag)) return { facebook: 'already', name: meta.name };
     await env.CARDS.put(flag, '1', { expirationTtl: 60 * 60 * 36 });
-    const text = composeReel(meta, env.SITE, now);
+    const text = composeReel(meta, env.SITE, now, await tagsFor(env, meta));
     const videoUrl = 'https://ocfire-collector.initial-apps.workers.dev/api/reel.mp4';
     const nowIso = iso(now);
     let status = 'dry_run';
@@ -366,5 +424,5 @@ async function maybePostReel(env, insert, now, mode, used, cap) {
         }
     }
     await insert.bind(meta.id, 'reel', nowIso, igStatus, igPostId, text, meta.acres, meta.contained, igError, IG_PLATFORM).run();
-    return status;
+    return { facebook: status, instagram: igStatus, error, igError, name: meta.name };
 }

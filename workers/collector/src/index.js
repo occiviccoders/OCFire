@@ -16,7 +16,8 @@ import { pointInGeometry } from '../../../src/js/geo.js';
 import { distanceMiles } from '../../../src/js/util.js';
 import { CA_BBOX } from '../../../src/js/config.js';
 import { fetchLandCover, fetchSiteFacts } from '../../../src/js/siteFacts.js';
-import { reelSubject, runSocial } from './social.js';
+import { approvalPage, approveMonth, ensureApproval } from './approval.js';
+import { publishStoredReel, reelSubject, runSocial } from './social.js';
 import { renderCard } from './card.js';
 import wasm from '@resvg/resvg-wasm/index_bg.wasm';
 
@@ -600,6 +601,15 @@ export default {
     async fetch(request, env) {
         const { pathname } = new URL(request.url);
         // Manual "post now" (ignores posting hours; caps still apply). Needs the ADMIN_TOKEN secret.
+        if (request.method === 'GET' && pathname === '/api/social/approve') {
+            const url = new URL(request.url);
+            const result = await approveMonth(env, url.searchParams.get('month'), url.searchParams.get('token'));
+            return new Response(approvalPage(result), { status: result.ok ? 200 : 403, headers: { 'content-type': 'text/html; charset=utf-8' } });
+        }
+        if (request.method === 'POST' && pathname === '/api/social/approval') {
+            if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
+            return json(await ensureApproval(env));
+        }
         if (request.method === 'POST' && pathname === '/api/social/run') {
             if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
             return json(await runSocial(env, Date.now(), { anyHour: true, wasm }));
@@ -611,6 +621,10 @@ export default {
             const id = crypto.randomUUID();
             await env.CARDS.put(`${id}.jpg`, bytes);
             return json({ id, url: `https://ocfire-collector.initial-apps.workers.dev/api/card.jpg?id=${id}` });
+        }
+        if (request.method === 'POST' && pathname === '/api/reel/post') {
+            if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
+            return json(await publishStoredReel(env));
         }
         if (request.method === 'POST' && pathname === '/api/reel.mp4') {
             if (!env.ADMIN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
