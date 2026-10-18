@@ -1,4 +1,5 @@
 import { BASEMAPS, LABEL_FONT } from './config.js';
+import { FUEL_MIN_ZOOM } from './sources/fuel.js';
 import { EMPTY_FC } from './util.js';
 
 const containment = ['coalesce', ['get', 'contained'], 0];
@@ -25,11 +26,13 @@ export const LAYER_GROUPS = {
     fireWeather: ['fireweather-fill', 'fireweather-line'],
     smoke: ['smoke-fill', 'smoke-line'],
     fhsz: ['fhsz-fill', 'fhsz-line'],
+    fuel: ['fuel'],
+    dryness: ['dryness'],
     power: ['power-fill', 'power-line', 'power-points'],
 };
 
 // Off until toggled on in the sidebar.
-export const HIDDEN_BY_DEFAULT = ['smoke', 'fhsz', 'power'];
+export const HIDDEN_BY_DEFAULT = ['smoke', 'fhsz', 'fuel', 'dryness', 'power'];
 
 export function addBasemapLayers(map) {
     const firstSymbol = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
@@ -251,8 +254,8 @@ export function addFireLayers(map) {
     });
 }
 
-// Context layers drawn under the fire layers: hazard zones, power shutoffs, smoke; plus candidate
-// new fires on top of the hotspots.
+// Context layers drawn under the fire layers: brush fuel, hazard zones, power shutoffs, smoke;
+// plus candidate new fires on top of the hotspots.
 export function addHazardLayers(map) {
     for (const id of ['smoke', 'fhsz', 'power-areas', 'power-points', 'unmatched-heat']) {
         map.addSource(id, { type: 'geojson', data: EMPTY_FC });
@@ -263,6 +266,36 @@ export function addHazardLayers(map) {
 
     map.addLayer({ id: 'fhsz-fill', type: 'fill', source: 'fhsz', paint: { 'fill-color': fhszColor, 'fill-opacity': 0.22 } }, below);
     map.addLayer({ id: 'fhsz-line', type: 'line', source: 'fhsz', paint: { 'line-color': fhszColor, 'line-width': 0.6, 'line-opacity': 0.6 } }, below);
+    map.addSource('fuel', {
+        type: 'raster',
+        tiles: ['/api/fuel/tiles?bbox={bbox-epsg-3857}'],
+        tileSize: 256,
+        minzoom: FUEL_MIN_ZOOM,
+        maxzoom: 13,
+        attribution: 'Fuel models © LANDFIRE (USGS / USDA)',
+    });
+    map.addLayer({
+        id: 'fuel',
+        type: 'raster',
+        source: 'fuel',
+        minzoom: FUEL_MIN_ZOOM,
+        paint: { 'raster-opacity': 0.78, 'raster-fade-duration': 200 },
+    }, below);
+    map.addSource('dryness', {
+        type: 'raster',
+        tiles: ['/api/dryness/tiles?bbox={bbox-epsg-3857}'],
+        tileSize: 256,
+        minzoom: 4,
+        maxzoom: 12,
+        attribution: 'Dead fuel moisture © University of Idaho gridMET',
+    });
+    map.addLayer({
+        id: 'dryness',
+        type: 'raster',
+        source: 'dryness',
+        minzoom: 4,
+        paint: { 'raster-opacity': 0.72, 'raster-fade-duration': 200 },
+    }, below);
     map.addLayer({ id: 'power-fill', type: 'fill', source: 'power-areas', paint: { 'fill-color': powerColor, 'fill-opacity': 0.22 } }, below);
     map.addLayer({ id: 'power-line', type: 'line', source: 'power-areas', paint: { 'line-color': powerColor, 'line-width': 1.4 } }, below);
     map.addLayer({

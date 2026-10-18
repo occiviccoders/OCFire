@@ -74,6 +74,8 @@
                         <label class="toggle"><input type="checkbox" data-wind-toggle="arrows"><span class="toggle__swatch toggle__swatch--arrows" aria-hidden="true">➤</span>Wind arrows</label>
                         <label class="toggle" title="Hot-Dry-Windy index"><input type="checkbox" data-wind-toggle="hdw"><span class="toggle__swatch toggle__swatch--hdw"></span>Fire wx index</label>
                         <label class="toggle" title="Smoke plumes traced from satellite imagery (NOAA HMS)"><input type="checkbox" data-layer-toggle="smoke"><span class="toggle__swatch toggle__swatch--smoke"></span>Smoke plumes<i class="dot" data-source-status="smoke"></i></label>
+                        <label class="toggle" title="How dry the dead grass and small branches are today. Redder is drier. About 4 km squares, updated daily."><input type="checkbox" data-layer-toggle="dryness"><span class="toggle__swatch toggle__swatch--dryness"></span>Dry brush<i class="dot" data-source-status="dryness"></i></label>
+                        <label class="toggle" title="Where brush, grass, and forest fuel sit (LANDFIRE). Not how dry it is today. Zoom in to load."><input type="checkbox" data-layer-toggle="fuel"><span class="toggle__swatch toggle__swatch--fuel"></span>Brush &amp; fuel<i class="dot" data-source-status="fuel"></i></label>
                         <label class="toggle" title="CAL FIRE Fire Hazard Severity Zones (zoom in to load)"><input type="checkbox" data-layer-toggle="fhsz"><span class="toggle__swatch toggle__swatch--fhsz"></span>Hazard zones<i class="dot" data-source-status="fhsz"></i></label>
                         <label class="toggle" title="Public Safety Power Shutoffs and outages (SCE, Cal OES)"><input type="checkbox" data-layer-toggle="power"><span class="toggle__swatch toggle__swatch--power"></span>Power shutoffs<i class="dot" data-source-status="power"></i></label>
                         <label class="toggle"><input type="checkbox" id="toggle-satellite"><span class="toggle__swatch toggle__swatch--sat"></span>Satellite map</label>
@@ -206,6 +208,17 @@
                         <div class="legend__swatches"><span style="--c:rgba(200,190,178,.35)">Light</span><span style="--c:rgba(169,156,140,.55)">Medium</span><span style="--c:rgba(138,122,106,.8)">Heavy</span></div>
                         <div class="legend__note legend__smoke-none" hidden>No smoke plumes mapped over California today</div>
                     </div>
+                    <div class="legend__dryness" hidden>
+                        <div class="legend__title">Dry brush</div>
+                        <div class="legend__swatches"><span style="--c:#d7301f">Under 8%</span><span style="--c:#ff9f1c">Dry</span><span style="--c:#4c78b0">Wetter</span></div>
+                        <div class="legend__note">Dead grass and small branches. Click the map for the percent. Redder is drier.</div>
+                    </div>
+                    <div class="legend__fuel" hidden>
+                        <div class="legend__title">Brush &amp; fuel</div>
+                        <div class="legend__swatches"><span style="--c:#e6d35a">Grass</span><span style="--c:#ff9f1c">Brush</span><span style="--c:#d7301f">Dense brush</span><span style="--c:#a67c52">Trees</span></div>
+                        <div class="legend__note legend__fuel-zoom" hidden>Zoom in closer to load brush</div>
+                        <div class="legend__note">Click the map for the fuel type. Cities, water, and farms stay clear.</div>
+                    </div>
                     <div class="legend__fhsz" hidden>
                         <div class="legend__title">Fire hazard severity</div>
                         <div class="legend__swatches"><span style="--c:#f2d64b">Moderate</span><span style="--c:#f08c2e">High</span><span style="--c:#d7301f">Very high</span></div>
@@ -276,6 +289,11 @@
                             Copernicus Atmosphere Monitoring Service (CAMS) information</dd>
                         <dt>Smoke plumes</dt>
                         <dd><a href="https://www.ospo.noaa.gov/products/land/hms.html" target="_blank" rel="noopener">NOAA NESDIS Hazard Mapping System</a></dd>
+                        <dt>Dry brush</dt>
+                        <dd>University of Idaho <a href="https://www.climatologylab.org/gridmet.html" target="_blank" rel="noopener">gridMET</a> 100-hour dead fuel moisture. How dry the dead grass and small branches are, updated daily.</dd>
+                        <dt>Brush &amp; fuel</dt>
+                        <dd><a href="https://landfire.gov/fuel/fbfm40" target="_blank" rel="noopener">LANDFIRE</a> 2025 Scott and Burgan 40 fire behavior fuel models (FBFM40),
+                            U.S. Geological Survey and U.S. Department of Agriculture</dd>
                         <dt>Fire Hazard Severity Zones</dt>
                         <dd><a href="https://osfm.fire.ca.gov/what-we-do/community-wildfire-preparedness-and-mitigation/fire-hazard-severity-zones" target="_blank" rel="noopener">CAL FIRE Office of the State Fire Marshal</a></dd>
                         <dt>Power shutoffs &amp; outages</dt>

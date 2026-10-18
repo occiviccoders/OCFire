@@ -2,6 +2,7 @@ import { escapeHTML as e, formatAcres, formatDateTime, formatPercent, formatMile
 import { containmentColor, containmentStage, summarize } from './explain.js';
 import { compass, downwind } from './wind/fireWeather.js';
 import { FHSZ_MEANING } from './sources/fhsz.js';
+import { FUEL_GROUPS } from './sources/fuel.js';
 import { shareLinksHTML } from './share.js';
 
 function containmentBar(pct) {
@@ -221,6 +222,45 @@ export function fhszPopup(p) {
             <p class="popup__sub">${e(p.area)}</p>
             <p class="popup__summary">${e(FHSZ_MEANING[p.fhsz] || '')}</p>
             <p class="popup__meta">Zones rate long-term hazard from fuels, terrain and weather — not today’s fire risk.</p>
+        </div>`;
+}
+
+export function fuelPopup(info) {
+    if (!info || info.kind === 'empty') {
+        return `
+            <div class="popup">
+                <div class="popup__eyebrow">LANDFIRE fuel model</div>
+                <h3 class="popup__title">No reading here</h3>
+                <p class="popup__summary">This spot has no wildland fuel in the map. It may be open water, or outside the mapped area.</p>
+            </div>`;
+    }
+    const group = FUEL_GROUPS[info.group];
+    return `
+        <div class="popup">
+            <div class="popup__eyebrow">LANDFIRE 2025 · ${e(info.code)}</div>
+            <h3 class="popup__title">${e(info.label)}</h3>
+            <p class="popup__sub">${e(info.name)}</p>
+            <p class="popup__summary">${e(group?.note || '')}</p>
+            <p class="popup__meta">This is the vegetation that would burn, about a 30 meter square. It is not how dry the brush is today, and it is not a fire forecast.</p>
+        </div>`;
+}
+
+export function drynessPopup(info) {
+    if (!info || info.kind === 'empty') {
+        return `
+            <div class="popup">
+                <div class="popup__eyebrow">Dead fuel moisture</div>
+                <h3 class="popup__title">No reading here</h3>
+                <p class="popup__summary">This spot has no dryness reading. It may be open water, or outside the mapped area.</p>
+            </div>`;
+    }
+    return `
+        <div class="popup">
+            <div class="popup__eyebrow">100-hour dead fuel moisture</div>
+            <h3 class="popup__title">${e(info.label)}</h3>
+            <p class="popup__sub">${e(info.percent)}% moisture</p>
+            <p class="popup__summary">${e(info.note)}</p>
+            <p class="popup__meta">Dead grass and small branches, about a 4 km square, updated daily. Lower is drier. This is not how much brush is standing here, and it is not a forecast.</p>
         </div>`;
 }
 

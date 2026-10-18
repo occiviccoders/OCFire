@@ -407,6 +407,8 @@
         &--sat { background: linear-gradient(135deg, #3a5a40, #8a7d5b); }
         &--smoke { background: linear-gradient(90deg, rgba(190, 180, 165, 0.25), rgba(190, 180, 165, 0.7)); }
         &--fhsz { background: linear-gradient(90deg, #f2d64b, #f08c2e 50%, #d7301f); }
+        &--dryness { background: linear-gradient(90deg, #d7301f, #ff9f1c 45%, #ffd166 70%, #4c78b0); }
+        &--fuel { background: linear-gradient(90deg, #e6d35a, #ff9f1c 45%, #d7301f 75%, #a67c52); }
         &--power { background: rgba(164, 107, 255, 0.35); border: 1.5px solid #a46bff; }
         &--wind {
             height: 0.8rem;

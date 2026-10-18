@@ -12,6 +12,8 @@ import { fetchBaseline } from './sources/baseline.js';
 import { fetchFireWeather } from './sources/fireWeather.js';
 import { fetchSmoke } from './sources/smoke.js';
 import { FHSZ_MIN_ZOOM, fetchZonesInView } from './sources/fhsz.js';
+import { FUEL_MIN_ZOOM, fuelInfo } from './sources/fuel.js';
+import { drynessReading } from './sources/dryness.js';
 import { fetchPower } from './sources/power.js';
 import { camerasNear, loadCameras } from './sources/cameras.js';
 import { findUnmatchedHeat, INCIDENT_MI, PERSISTENT_MI, RECENT_HOURS } from './earlyDetection.js';
@@ -30,7 +32,7 @@ import { createPlanner } from './evac/planner.js';
 import { createReadiness } from './ready/ready.js';
 import { renderOCForecast, chartHourFromEvent } from './wind/ocForecast.js';
 import { createTimeline } from './wind/timeline.js';
-import { incidentPopup, perimeterPopup, hotspotPopup, fireWeatherPopup, heatPopup, smokePopup, fhszPopup, powerPopup } from './popups.js';
+import { incidentPopup, perimeterPopup, hotspotPopup, fireWeatherPopup, heatPopup, smokePopup, fhszPopup, fuelPopup, drynessPopup, powerPopup } from './popups.js';
 import { renderStats, renderIncidentList, renderFireWeatherBanner, setStatus, markSourceStatus } from './sidebar.js';
 import { pointInGeometry } from './geo.js';
 import { EMPTY_FC, bboxOf, normalizeName, formatClock, featureCollection, escapeHTML, distanceMiles } from './util.js';
@@ -43,7 +45,7 @@ const state = {
     heatContext: { history: [], baseline: null, reported: null },
     hotspotCount: null,
     fireWeather: EMPTY_FC,
-    overlays: { smoke: false, fhsz: false, power: false },
+    overlays: { smoke: false, fhsz: false, fuel: false, dryness: false, power: false },
     selectedId: null,
     wind: { forecast: null, series: {}, air: {}, ocPoint: 'central', hour: 0, flow: true, arrows: false, hdw: false },
 };
@@ -419,6 +421,7 @@ function setForecastPoint(id) {
 }
 
 // Smoke, hazard zones and power are fetched only while their layer is switched on.
+// Brush fuel is a raster tile layer; turning it on just shows tiles already wired to the map.
 async function loadOverlay(name) {
     try {
         if (name === 'smoke') {
@@ -453,11 +456,38 @@ async function loadHazardZones() {
     if (request === fhszRequest) map.getSource('fhsz').setData(zones);
 }
 
+function syncFuelZoomNote() {
+    const note = document.querySelector('.legend__fuel-zoom');
+    if (note) note.hidden = map.getZoom() >= FUEL_MIN_ZOOM;
+}
+
+async function drynessAt(lng, lat) {
+    const res = await fetch(`/api/dryness/at?lng=${lng}&lat=${lat}`);
+    if (!res.ok) throw new Error(`Dryness lookup failed (${res.status})`);
+    const data = await res.json();
+    const reading = drynessReading(data.percent);
+    return reading ? { kind: 'dryness', percent: data.percent, ...reading } : { kind: 'empty' };
+}
+
+async function fuelAt(lng, lat) {
+    const res = await fetch(`/api/fuel/at?lng=${lng}&lat=${lat}`);
+    if (!res.ok) throw new Error(`Fuel lookup failed (${res.status})`);
+    const data = await res.json();
+    if (data.value == null || data.value === 'NoData') return { kind: 'empty' };
+    const info = fuelInfo(data.value);
+    return info ? { kind: 'fuel', ...info } : { kind: 'empty' };
+}
+
 function setOverlay(name, on) {
     state.overlays[name] = on;
     setGroupVisibility(map, name, on);
     const legend = document.querySelector(`.legend__${name}`);
     if (legend) legend.hidden = !on;
+    if (name === 'fuel') {
+        syncFuelZoomNote();
+        if (on) markSourceStatus({ fuel: { status: 'fulfilled' } });
+    }
+    if (name === 'dryness' && on) markSourceStatus({ dryness: { status: 'fulfilled' } });
     if (on) loadOverlay(name);
 }
 
@@ -480,7 +510,9 @@ function wireInteractions() {
         ['fhsz-fill', (f) => fhszPopup(f.properties)],
     ];
 
-    map.on('click', (ev) => {
+    let fuelClick = 0;
+    let drynessClick = 0;
+    map.on('click', async (ev) => {
         if (planner.handleMapClick(ev.lngLat) || readiness.handleMapClick(ev.lngLat)) return;
         // Topmost interactive layer wins.
         for (const [layer, render] of clickTargets) {
@@ -491,6 +523,30 @@ function wireInteractions() {
             if (html) {
                 incidentCard.remove();
                 popup.setLngLat(ev.lngLat).setHTML(html).addTo(map);
+            }
+            return;
+        }
+        if (state.overlays.dryness) {
+            const request = ++drynessClick;
+            try {
+                const info = await drynessAt(ev.lngLat.lng, ev.lngLat.lat);
+                if (request !== drynessClick) return;
+                incidentCard.remove();
+                popup.setLngLat(ev.lngLat).setHTML(drynessPopup(info)).addTo(map);
+            } catch (err) {
+                console.warn('[ocfire] dryness lookup failed:', err);
+            }
+            return;
+        }
+        if (state.overlays.fuel && map.getZoom() >= FUEL_MIN_ZOOM) {
+            const request = ++fuelClick;
+            try {
+                const info = await fuelAt(ev.lngLat.lng, ev.lngLat.lat);
+                if (request !== fuelClick) return;
+                incidentCard.remove();
+                popup.setLngLat(ev.lngLat).setHTML(fuelPopup(info)).addTo(map);
+            } catch (err) {
+                console.warn('[ocfire] fuel lookup failed:', err);
             }
             return;
         }
@@ -602,6 +658,11 @@ map.on('load', () => {
     whileVisible(refreshWind, WIND_REFRESH_MS);
     map.on('moveend', () => {
         if (state.overlays.fhsz) loadOverlay('fhsz');
+        if (state.overlays.fuel) syncFuelZoomNote();
+    });
+    map.on('error', (ev) => {
+        if (ev.sourceId === 'fuel' && state.overlays.fuel) markSourceStatus({ fuel: { status: 'rejected', reason: ev.error } });
+        if (ev.sourceId === 'dryness' && state.overlays.dryness) markSourceStatus({ dryness: { status: 'rejected', reason: ev.error } });
     });
     loadCameras()
         .then(() => {
